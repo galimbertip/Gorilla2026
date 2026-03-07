@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>GORILLA 2026</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Courier New',monospace; }
+  #wrap {
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    background:#000;
+  }
+  #gameCanvas {
+    display:block;
+    max-width:100vw;
+    max-height:100svh;
+    /* width/height set by JS */
+    touch-action:none;
+    cursor:crosshair;
+  }
+  /* ── Overlays ── */
+  .overlay {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    pointer-events:all;
+  }
+  .hidden { display:none !important; }
+
+  /* Title */
+  #titleScreen { background:rgba(7,7,18,.96); gap:14px; }
+  .edition-label { font-size:10px; letter-spacing:8px; color:#00ffe0; text-transform:uppercase; }
+  .title-main {
+    font-size:clamp(44px,14vw,72px); font-weight:900; letter-spacing:-1px; line-height:1;
+    background:linear-gradient(135deg,#00ffe0,#ff3c78);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .title-sub { font-size:11px; color:#556a8a; letter-spacing:4px; margin-top:-4px; }
+  .instructions { margin-top:10px; display:flex; flex-direction:column; gap:7px; color:#8899bb; font-size:11px; text-align:center; line-height:1.6; }
+  .instructions span.hl1 { color:#00ffe0; }
+  .instructions span.hl2 { color:#ff3c78; }
+  .instructions span.hl3 { color:#ffe600; }
+
+  /* Game Over */
+  #gameOver { background:rgba(7,7,18,.92); gap:12px; }
+  .round-label { font-size:9px; letter-spacing:6px; color:#556a8a; text-transform:uppercase; }
+  .winner-text { font-size:clamp(36px,12vw,54px); font-weight:900; line-height:1; }
+  .score-row { display:flex; gap:32px; margin-top:4px; align-items:center; }
+  .score-val { font-size:clamp(26px,9vw,38px); font-weight:900; text-align:center; }
+  .score-label { font-size:10px; letter-spacing:2px; color:#556a8a; text-align:center; }
+  .score-sep { color:#334466; font-size:28px; }
+  .btn-row { display:flex; gap:14px; margin-top:14px; }
+
+  /* Buttons */
+  .btn {
+    padding:13px 32px; background:transparent;
+    font-family:'Courier New',monospace; font-size:13px;
+    font-weight:700; letter-spacing:3px; cursor:pointer;
+    border-radius:2px; transition:box-shadow .15s;
+  }
+  .btn-primary { border:2px solid #00ffe0; color:#00ffe0; box-shadow:0 0 18px #00ffe044; }
+  .btn-secondary { border:2px solid #334466; color:#556a8a; }
+  .btn-primary:active { box-shadow:0 0 32px #00ffe088; }
+
+  /* Fire button */
+  #fireBtn {
+    position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+    padding:16px 52px;
+    background:rgba(7,7,18,.92);
+    border:2.5px solid #ffe600; color:#ffe600;
+    font-family:'Courier New',monospace; font-size:16px;
+    font-weight:900; letter-spacing:5px; cursor:pointer;
+    border-radius:2px;
+    box-shadow:0 0 28px #ffe60055;
+    text-shadow:0 0 12px #ffe600;
+    pointer-events:all; z-index:10;
+  }
+  #fireBtn:active { box-shadow:0 0 48px #ffe600aa; }
+  #fireBtn.hidden { display:none; }
+
+  .dos-credit { font-size:9px; color:#334466; letter-spacing:2px; margin-top:10px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Title -->
+  <div class="overlay" id="titleScreen">
+    <div class="edition-label">◈ 2026 edition ◈</div>
+    <div class="title-main">GORILLA</div>
+    <div class="title-sub">THE BANANA WARS</div>
+    <div class="instructions">
+      <div>👆 <span class="hl1">Trascina sinistra/destra</span> → angolo</div>
+      <div>👆 <span class="hl2">Trascina su/giù</span> → potenza</div>
+      <div>🎯 Premi <span class="hl3">FIRE</span> per lanciare la banana</div>
+      <div style="margin-top:4px;color:#556a8a;">Turni alternati — distruggi il gorilla avversario</div>
+    </div>
+    <button class="btn btn-primary" id="startBtn" style="margin-top:18px;">START GAME</button>
+    <div class="dos-credit">INSPIRED BY GORILLAS.BAS — DOS 1991</div>
+  </div>
+
+  <!-- Game Over -->
+  <div class="overlay hidden" id="gameOver">
+    <div class="round-label">round over</div>
+    <div class="winner-text" id="winnerText"></div>
+    <div class="score-row">
+      <div><div class="score-val" id="s0" style="color:#00ffe0">0</div><div class="score-label">P1</div></div>
+      <div class="score-sep">:</div>
+      <div><div class="score-val" id="s1" style="color:#ff3c78">0</div><div class="score-label">P2</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="rematchBtn">REMATCH</button>
+      <button class="btn btn-secondary" id="menuBtn">MENU</button>
+    </div>
+  </div>
+
+  <!-- Fire button (shown during aiming) -->
+  <button id="fireBtn" class="hidden">🍌 FIRE</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  GORILLA 2026  —  vanilla JS / HTML5 Canvas
+// ═══════════════════════════════════════════════════════════════════
+
+const NEON = {
+  bg:'#070712', sky:'#0a0e1a',
+  p1:'#00ffe0', p2:'#ff3c78',
+  banana:'#ffe600', explosion:'#ff6a00',
+  buildings:['#0d1f3c','#0f2545','#102a4c','#0e2038','#112850'],
+  windows:['#ffe600','#00ffe0','#ff3c78','#ffffff','#b0f0ff'],
+  moon:'#c8e6ff', star:'#e0f0ff',
+  grid:'#0d1a2e', road:'#111827',
+  hudBorder:'#1a2f5a',
+};
+
+const W=390, H=700;
+const GRAVITY=9.8, DT=0.042;
+const BANANA_R=10, GW=48, GH=56;
+const EXPLOSION_R=38, N_BUILDINGS=8;
+
+let canvas, ctx;
+let state=null, scores=[0,0], raf=null;
+let dragState=null;
+
+// ── Utility ─────────────────────────────────────────────────────────
+function rnd(a,b){return a+Math.random()*(b-a);}
+
+// ── City generation ──────────────────────────────────────────────────
+function buildCity(){
+  const bs=[];
+  let x=0;
+  const minW=W/(N_BUILDINGS+1), maxW=W/(N_BUILDINGS-1);
+  for(let i=0;i<N_BUILDINGS;i++){
+    const w=i===N_BUILDINGS-1?W-x:rnd(minW,maxW);
+    const h=rnd(H*0.22,H*0.56);
+    const col=NEON.buildings[Math.floor(Math.random()*NEON.buildings.length)];
+    const wins=[];
+    const wc=Math.floor(w/14), wr=Math.floor(h/18);
+    for(let r=0;r<wr;r++) for(let c=0;c<wc;c++)
+      if(Math.random()>.3) wins.push({x:x+5+c*14,y:H-h+5+r*18,
+        on:Math.random()>.35, col:NEON.windows[Math.floor(Math.random()*5)]});
+    bs.push({x,y:H-h,w,h,col,wins,craters:[]});
+    x+=w;
+  }
+  return bs;
+}
+
+function placeGorillas(bs){
+  const b1=bs[1], b2=bs[bs.length-2];
+  return [
+    {x:b1.x+b1.w/2-GW/2, y:b1.y-GH},
+    {x:b2.x+b2.w/2-GW/2, y:b2.y-GH},
+  ];
+}
+
+function genStars(n){
+  return Array.from({length:n},()=>({
+    x:Math.random()*W, y:Math.random()*H*0.45,
+    r:Math.random()*1.5+.3, phase:Math.random()*Math.PI*2
+  }));
+}
+
+// ── Physics ──────────────────────────────────────────────────────────
+function stepBanana(b, wind){
+  return {
+    pos:{x:b.pos.x+b.vel.x*DT, y:b.pos.y+b.vel.y*DT},
+    vel:{x:b.vel.x+wind*DT,    y:b.vel.y+GRAVITY*DT},
+    spin:b.spin+DT*9
+  };
+}
+
+function hitBuilding(pos,bs){
+  for(let i=0;i<bs.length;i++){
+    const b=bs[i];
+    if(pos.x>=b.x&&pos.x<=b.x+b.w&&pos.y>=b.y&&pos.y<=H) return i;
+  }
+  return -1;
+}
+
+function hitGorilla(pos,gors,shooter){
+  for(let i=0;i<gors.length;i++){
+    if(i===shooter) continue;
+    const g=gors[i];
+    const dx=pos.x-(g.x+GW/2), dy=pos.y-(g.y+GH/2);
+    if(Math.sqrt(dx*dx+dy*dy)<EXPLOSION_R*.72) return i;
+  }
+  return -1;
+}
+
+function blastBuildings(bs,cx,cy,r){
+  return bs.map(b=>{
+    const wins=b.wins.map(w=>{
+      const dx=(w.x+4)-cx, dy=(w.y+5)-cy;
+      return Math.sqrt(dx*dx+dy*dy)<r?{...w,on:false}:w;
+    });
+    return {...b,wins,craters:[...b.craters,{cx,cy,r}]};
+  });
+}
+
+// ── Init game ────────────────────────────────────────────────────────
+function initGame(){
+  const buildings=buildCity();
+  const gorillas=placeGorillas(buildings);
+  state={
+    buildings, gorillas,
+    wind:rnd(-12,12),
+    stars:genStars(65),
+    turn:0,
+    phase:'aiming',   // aiming|flying|exploding|celebrating|done
+    angle:45, power:50,
+    banana:null, spinT:0,
+    explosion:null, expParts:[],
+    throwAnim:false,
+    celebEnd:0, t:0,
+  };
+  show('playing');
+}
+
+// ── Screens ──────────────────────────────────────────────────────────
+function show(screen){
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('gameOver').classList.add('hidden');
+  document.getElementById('fireBtn').classList.add('hidden');
+  if(screen==='title')   document.getElementById('titleScreen').classList.remove('hidden');
+  if(screen==='gameover')document.getElementById('gameOver').classList.remove('hidden');
+  if(screen==='playing') document.getElementById('fireBtn').classList.remove('hidden');
+}
+
+// ── Fire ─────────────────────────────────────────────────────────────
+function fire(){
+  if(!state||state.phase!=='aiming') return;
+  const g=state.gorillas[state.turn];
+  const cx=g.x+GW/2, cy=g.y+GH*.3;
+  const aRad=(state.turn===0?state.angle:180-state.angle)*Math.PI/180;
+  const spd=state.power*1.55;
+  state.banana={pos:{x:cx,y:cy},vel:{x:Math.cos(-aRad)*spd,y:Math.sin(-aRad)*spd},spin:0};
+  state.spinT=0;
+  state.phase='flying';
+  state.throwAnim=true;
+}
+
+function triggerExplosion(x,y,killed){
+  state.phase='exploding';
+  state.banana=null; state.throwAnim=false;
+  const parts=Array.from({length:24},()=>({
+    x,y,vx:rnd(-1.2,1.2),vy:rnd(-2.2,.6),r:rnd(2,6),
+    col:[NEON.explosion,NEON.banana,'#ff2a00','#ffb300'][Math.floor(Math.random()*4)]
+  }));
+  state.explosion={x,y,t0:state.t,dur:.85,killed};
+  state.expParts=parts;
+}
+
+// ── Draw helpers ──────────────────────────────────────────────────────
+function drawBg(){
+  const g=ctx.createLinearGradient(0,0,0,H*.65);
+  g.addColorStop(0,'#030610'); g.addColorStop(1,'#0a0e1a');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle=NEON.grid; ctx.lineWidth=.5;
+  for(let x=0;x<=W;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H*.62);ctx.stroke();}
+  for(let y=0;y<=H*.62;y+=22){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // stars
+  const t=state.t;
+  state.stars.forEach(s=>{
+    const a=.35+.65*Math.abs(Math.sin(t*.6+s.phase));
+    ctx.globalAlpha=a; ctx.fillStyle=NEON.star;
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+
+  // moon
+  ctx.save();
+  ctx.fillStyle=NEON.moon; ctx.shadowColor=NEON.moon; ctx.shadowBlur=22;
+  ctx.beginPath(); ctx.arc(W*.78,H*.11,22,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawBuildings(){
+  state.buildings.forEach(b=>{
+    // body
+    ctx.fillStyle=b.col; ctx.fillRect(b.x,b.y,b.w,b.h);
+    // border
+    ctx.strokeStyle='#1a3a6a'; ctx.lineWidth=1; ctx.strokeRect(b.x,b.y,b.w,b.h);
+    // top glow
+    ctx.strokeStyle='#2a4a8a'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x+b.w,b.y); ctx.stroke();
+
+    // craters (punch holes via destination-out)
+    if(b.craters.length){
+      b.craters.forEach(cr=>{
+        ctx.save();
+        ctx.globalCompositeOperation='destination-out';
+        const rg=ctx.createRadialGradient(cr.cx,cr.cy,0,cr.cx,cr.cy,cr.r);
+        rg.addColorStop(0,'rgba(0,0,0,1)');
+        rg.addColorStop(.65,'rgba(0,0,0,.85)');
+        rg.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=rg;
+        ctx.beginPath(); ctx.arc(cr.cx,cr.cy,cr.r,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    // windows
+    b.wins.forEach(w=>{
+      if(!w.on) return;
+      ctx.fillStyle=w.col; ctx.shadowColor=w.col; ctx.shadowBlur=7;
+      ctx.fillRect(w.x,w.y,8,10); ctx.shadowBlur=0;
+    });
+  });
+}
+
+function drawRoad(){
+  ctx.fillStyle=NEON.road; ctx.fillRect(0,H-18,W,18);
+  ctx.strokeStyle='#1e3a5a'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,H-18); ctx.lineTo(W,H-18); ctx.stroke();
+  ctx.setLineDash([20,15]); ctx.strokeStyle='#ffe600'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(0,H-9); ctx.lineTo(W,H-9); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawGorilla(g,player,celebrating,throwing){
+  const col=player===0?NEON.p1:NEON.p2;
+  const gx=g.x, gy=g.y;
+  ctx.save();
+  ctx.shadowColor=col; ctx.shadowBlur=14; ctx.fillStyle=col; ctx.strokeStyle=col;
+
+  // body
+  ctx.fillRect(gx+10,gy+18,28,26);
+  // head
+  ctx.beginPath(); ctx.arc(gx+24,gy+12,13,0,Math.PI*2); ctx.fill();
+  // eye whites
+  ctx.fillStyle=NEON.bg;
+  ctx.beginPath(); ctx.arc(gx+19,gy+10,3.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(gx+29,gy+10,3.5,0,Math.PI*2); ctx.fill();
+  // pupils
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.arc(gx+20,gy+10,1.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(gx+30,gy+10,1.5,0,Math.PI*2); ctx.fill();
+  // mouth
+  ctx.strokeStyle=NEON.bg; ctx.lineWidth=2.2;
+  ctx.beginPath();
+  if(celebrating) ctx.arc(gx+24,gy+17,5,0,Math.PI);
+  else ctx.arc(gx+24,gy+19,4,Math.PI,0);
+  ctx.stroke();
+  // arms
+  ctx.strokeStyle=col; ctx.lineWidth=5; ctx.lineCap='round';
+  if(throwing){
+    ctx.beginPath(); ctx.moveTo(gx+10,gy+24); ctx.lineTo(gx-8,gy+8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx+38,gy+24); ctx.lineTo(gx+54,gy+44); ctx.stroke();
+  } else if(celebrating){
+    ctx.beginPath(); ctx.moveTo(gx+10,gy+24); ctx.lineTo(gx-10,gy+5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx+38,gy+24); ctx.lineTo(gx+58,gy+5); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(gx+10,gy+24); ctx.lineTo(gx-6,gy+36); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx+38,gy+24); ctx.lineTo(gx+54,gy+36); ctx.stroke();
+  }
+  // legs
+  ctx.beginPath();
+  ctx.moveTo(gx+16,gy+44); ctx.lineTo(gx+14,gy+56);
+  ctx.moveTo(gx+32,gy+44); ctx.lineTo(gx+34,gy+56);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBanana(){
+  if(!state.banana) return;
+  const {pos,spin}=state.banana;
+  ctx.save();
+  ctx.translate(pos.x,pos.y); ctx.rotate(spin);
+  ctx.fillStyle=NEON.banana; ctx.shadowColor=NEON.banana; ctx.shadowBlur=20;
+  ctx.beginPath(); ctx.ellipse(0,0,BANANA_R,BANANA_R*.5,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#c8a000'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,BANANA_R*.6,.3,Math.PI-.3); ctx.stroke();
+  ctx.restore();
+}
+
+function drawExplosion(){
+  if(!state.explosion) return;
+  const ex=state.explosion;
+  const p=Math.min((state.t-ex.t0)/ex.dur,1);
+  ctx.save();
+  // shockwave ring
+  ctx.strokeStyle=NEON.explosion; ctx.lineWidth=3*(1-p); ctx.globalAlpha=(1-p)*.8;
+  ctx.beginPath(); ctx.arc(ex.x,ex.y,EXPLOSION_R*p*1.6,0,Math.PI*2); ctx.stroke();
+  // core
+  const rg=ctx.createRadialGradient(ex.x,ex.y,0,ex.x,ex.y,EXPLOSION_R*(1-p*.4));
+  rg.addColorStop(0,`rgba(255,255,200,${(1-p)*.95})`);
+  rg.addColorStop(.35,`rgba(255,106,0,${(1-p)*.75})`);
+  rg.addColorStop(1,'rgba(255,60,0,0)');
+  ctx.globalAlpha=1; ctx.fillStyle=rg;
+  ctx.beginPath(); ctx.arc(ex.x,ex.y,EXPLOSION_R*(1-p*.3),0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  // particles
+  state.expParts.forEach(pt=>{
+    const px=pt.x+pt.vx*p*45;
+    const py=pt.y+pt.vy*p*45+.5*GRAVITY*p*p*25;
+    ctx.save();
+    ctx.globalAlpha=1-p; ctx.fillStyle=pt.col; ctx.shadowColor=pt.col; ctx.shadowBlur=9;
+    ctx.beginPath(); ctx.arc(px,py,pt.r*(1-p*.5),0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawAimGuide(){
+  if(state.phase!=='aiming') return;
+  const g=state.gorillas[state.turn];
+  const col=state.turn===0?NEON.p1:NEON.p2;
+  const cx=g.x+GW/2, cy=g.y+GH*.3;
+  const aRad=(state.turn===0?state.angle:180-state.angle)*Math.PI/180;
+  const spd=state.power*1.55;
+
+  // trajectory preview dots
+  ctx.save();
+  ctx.strokeStyle=col; ctx.globalAlpha=.22; ctx.lineWidth=1.5;
+  ctx.setLineDash([5,7]);
+  ctx.beginPath();
+  let px=cx,py=cy,pvx=Math.cos(-aRad)*spd,pvy=Math.sin(-aRad)*spd;
+  ctx.moveTo(px,py);
+  for(let i=0;i<45;i++){
+    pvx+=state.wind*DT*3; pvy+=GRAVITY*DT*3;
+    px+=pvx*DT*3; py+=pvy*DT*3;
+    if(px<-10||px>W+10||py>H+10) break;
+    ctx.lineTo(px,py);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+  // direction arrow
+  ctx.globalAlpha=.75; ctx.lineWidth=2.5;
+  ctx.shadowColor=col; ctx.shadowBlur=10;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+Math.cos(-aRad)*38,cy+Math.sin(-aRad)*38);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHUD(){
+  // background bar
+  ctx.fillStyle='rgba(7,7,18,.93)';
+  ctx.fillRect(0,0,W,60);
+  ctx.strokeStyle=NEON.hudBorder; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,60); ctx.lineTo(W,60); ctx.stroke();
+
+  // scores
+  ctx.font='bold 12px "Courier New",monospace';
+  ctx.fillStyle=NEON.p1; ctx.shadowColor=NEON.p1; ctx.shadowBlur=9;
+  ctx.fillText(`P1: ${scores[0]}`,14,20); ctx.shadowBlur=0;
+  ctx.fillStyle=NEON.p2; ctx.shadowColor=NEON.p2; ctx.shadowBlur=9;
+  ctx.fillText(`P2: ${scores[1]}`,W-62,20); ctx.shadowBlur=0;
+
+  // turn indicator
+  const tcol=state.turn===0?NEON.p1:NEON.p2;
+  ctx.font='bold 10px "Courier New",monospace';
+  ctx.fillStyle=tcol; ctx.shadowColor=tcol; ctx.shadowBlur=14;
+  ctx.textAlign='center';
+  const label=state.phase==='flying'?'◉ IN VOLO':
+               state.phase==='exploding'?'💥 BOOM!':
+               state.phase==='celebrating'?'🎉 VITTORIA!':
+               `▶ P${state.turn+1} MIRA`;
+  ctx.fillText(label,W/2,20);
+  ctx.shadowBlur=0; ctx.textAlign='left';
+
+  // wind bar
+  const wx=W/2-62;
+  ctx.fillStyle='#556a8a'; ctx.font='9px "Courier New",monospace';
+  ctx.fillText('VENTO',wx,38);
+  ctx.strokeStyle='#334466'; ctx.lineWidth=1;
+  ctx.strokeRect(wx+38,28,82,11);
+  const wp=Math.min(Math.abs(state.wind)/18*82,82);
+  const winX=state.wind>=0?wx+38:wx+38+82-wp;
+  ctx.fillStyle=state.wind>=0?NEON.p1:NEON.p2;
+  ctx.fillRect(winX,28,wp,11);
+  ctx.fillStyle='#8899bb'; ctx.font='11px "Courier New",monospace';
+  ctx.fillText(state.wind>=0?'→':'←',wx+126,38);
+  ctx.fillStyle='#556a8a'; ctx.font='8px "Courier New",monospace';
+  ctx.fillText(Math.abs(state.wind).toFixed(1),wx+138,38);
+
+  // angle / power
+  if(state.phase==='aiming'){
+    ctx.fillStyle=tcol; ctx.font='bold 10px "Courier New",monospace';
+    ctx.textAlign='right';
+    ctx.fillText(`${Math.round(state.angle)}°  /  ${Math.round(state.power)}%`,W-14,38);
+    ctx.textAlign='left';
+    // power bar
+    ctx.strokeStyle='#334466'; ctx.lineWidth=1;
+    ctx.strokeRect(14,46,130,8);
+    const pg=ctx.createLinearGradient(14,0,144,0);
+    pg.addColorStop(0,NEON.p1); pg.addColorStop(.5,NEON.banana); pg.addColorStop(1,NEON.p2);
+    ctx.fillStyle=pg;
+    ctx.fillRect(14,46,(state.power/100)*130,8);
+  }
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────
+function loop(){
+  if(!state){ raf=requestAnimationFrame(loop); return; }
+  state.t+=DT;
+
+  // physics
+  if(state.phase==='flying'&&state.banana){
+    const STEPS=3;
+    for(let i=0;i<STEPS;i++){
+      state.banana=stepBanana(state.banana,state.wind);
+      const pos=state.banana.pos;
+
+      if(pos.x<-40||pos.x>W+40||pos.y>H+40){
+        // miss
+        state.phase='aiming'; state.turn=1-state.turn;
+        state.banana=null; state.throwAnim=false;
+        state.wind=rnd(-12,12); break;
+      }
+      const gHit=hitGorilla(pos,state.gorillas,state.turn);
+      if(gHit!==-1){
+        triggerExplosion(pos.x,pos.y,gHit); break;
+      }
+      const bHit=hitBuilding(pos,state.buildings);
+      if(bHit!==-1){
+        state.buildings=blastBuildings(state.buildings,pos.x,pos.y,EXPLOSION_R);
+        triggerExplosion(pos.x,pos.y,-1); break;
+      }
+    }
+  }
+
+  if(state.phase==='exploding'){
+    const p=(state.t-state.explosion.t0)/state.explosion.dur;
+    if(p>=1){
+      if(state.explosion.killed!==-1){
+        state.phase='celebrating'; state.celebEnd=state.t+2.2;
+      } else {
+        state.phase='aiming'; state.turn=1-state.turn;
+        state.banana=null; state.throwAnim=false;
+        state.wind=rnd(-12,12);
+        state.explosion=null;
+      }
+    }
+  }
+
+  if(state.phase==='celebrating'&&state.t>=state.celebEnd){
+    const w=state.turn;
+    scores[w]++;
+    document.getElementById('s0').textContent=scores[0];
+    document.getElementById('s1').textContent=scores[1];
+    const wt=document.getElementById('winnerText');
+    wt.textContent=`P${w+1} VINCE!`;
+    wt.style.color=w===0?NEON.p1:NEON.p2;
+    wt.style.textShadow=`0 0 40px ${w===0?NEON.p1:NEON.p2}`;
+    state.phase='done';
+    show('gameover');
+  }
+
+  // ── draw ──
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+  drawBuildings();
+  drawRoad();
+
+  state.gorillas.forEach((g,i)=>{
+    if(state.explosion&&state.explosion.killed===i) return;
+    const cel=state.phase==='celebrating'&&state.turn===i;
+    const thr=state.throwAnim&&state.turn===i&&state.phase==='flying';
+    drawGorilla(g,i,cel,thr);
+  });
+
+  drawBanana();
+  drawExplosion();
+  drawAimGuide();
+  drawHUD();
+
+  raf=requestAnimationFrame(loop);
+}
+
+// ── Canvas scaling ────────────────────────────────────────────────────
+function resize(){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const scale=Math.min(vw/W, vh/H);
+  canvas.width=W; canvas.height=H;
+  canvas.style.width=Math.round(W*scale)+'px';
+  canvas.style.height=Math.round(H*scale)+'px';
+}
+
+// ── Touch / mouse input ────────────────────────────────────────────────
+function getPos(e){
+  const rect=canvas.getBoundingClientRect();
+  const sx=W/rect.width, sy=H/rect.height;
+  const src=e.touches?e.touches[0]:e;
+  return {x:(src.clientX-rect.left)*sx, y:(src.clientY-rect.top)*sy};
+}
+
+canvas_onPointerDown=function(e){
+  e.preventDefault();
+  if(!state||state.phase!=='aiming') return;
+  const p=getPos(e);
+  dragState={sx:p.x,sy:p.y,sa:state.angle,sp:state.power};
+};
+canvas_onPointerMove=function(e){
+  e.preventDefault();
+  if(!state||state.phase!=='aiming'||!dragState) return;
+  const p=getPos(e);
+  const dx=p.x-dragState.sx, dy=p.y-dragState.sy;
+  state.angle=Math.max(0,Math.min(180,dragState.sa+dx*.4));
+  state.power=Math.max(5,Math.min(100,dragState.sp-dy*.28));
+};
+canvas_onPointerUp=function(e){ e.preventDefault(); dragState=null; };
+
+// ── Bootstrap ────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  canvas=document.getElementById('gameCanvas');
+  ctx=canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize',resize);
+
+  // events
+  canvas.addEventListener('touchstart', canvas_onPointerDown,{passive:false});
+  canvas.addEventListener('touchmove',  canvas_onPointerMove,{passive:false});
+  canvas.addEventListener('touchend',   canvas_onPointerUp,  {passive:false});
+  canvas.addEventListener('mousedown',  canvas_onPointerDown);
+  canvas.addEventListener('mousemove',  canvas_onPointerMove);
+  canvas.addEventListener('mouseup',    canvas_onPointerUp);
+
+  document.getElementById('fireBtn').addEventListener('click', fire);
+  document.getElementById('fireBtn').addEventListener('touchstart',e=>{e.stopPropagation();fire();},{passive:false});
+  document.getElementById('startBtn').addEventListener('click', initGame);
+  document.getElementById('rematchBtn').addEventListener('click', initGame);
+  document.getElementById('menuBtn').addEventListener('click',()=>{
+    scores=[0,0];
+    document.getElementById('s0').textContent='0';
+    document.getElementById('s1').textContent='0';
+    state=null; show('title');
+  });
+
+  // start render loop immediately (shows title over idle canvas)
+  state=null;
+  raf=requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
