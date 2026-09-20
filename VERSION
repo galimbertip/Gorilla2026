@@ -1,1 +1,49 @@
 1.1.0
+
+Changelog
+=========
+
+Versionamento in stile MAJOR.MINOR.PATCH:
+- PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
+- MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
+- MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.1.0 — 2026-09-20
+--------------------
+Prima "release" tracciata del progetto: introduce il versionamento stesso, un'icona a tema
+per l'installazione come app, e una serie di correzioni tecniche individuate nell'analisi.
+
+Aggiunto:
+- Numero di versione mostrato a schermo in basso a sinistra (const VERSION in index.html).
+- Icona a tema (gorilla neon + banana) al posto della "G" generica generata dal browser:
+  manifest.json, apple-touch-icon, favicon, cartella icons/.
+- Impatto a terra visibile: una banana che supera tutti gli edifici ora esplode (senza
+  uccidere nessuno) al livello della strada invece di sparire silenziosamente sotto lo schermo.
+- Persistenza del punteggio tra le sessioni (localStorage), azzerato solo tornando al menu.
+
+Corretto:
+- Disallineamento fra il limite di collisione degli edifici (CH-14) e la strada disegnata
+  (CH-24), unificati in una singola costante ROAD_H=24.
+- Il resize/cambio orientamento non rigenera più una città casuale da zero durante una
+  partita in corso (perdendo i crateri fatti finora): se l'orientamento non cambia davvero
+  non viene toccato nulla; se cambia, la città esistente viene riscalata mantenendo edifici
+  e danni.
+- La ricerca del tiro ottimale dell'IA (computeAI) usava una griglia molto fitta (~540.000
+  iterazioni nel caso peggiore ad ogni turno); diradata (~6x meno iterazioni) mantenendo una
+  mira praticamente identica.
+- Refuso "DOS 1991" -> "DOS 1990" nella schermata iniziale.
+
+v1.0.1 — fix precedente (non ancora taggato prima d'ora)
+----------------------------------------------------------
+- La freccia di mira non seguiva il puntatore quando si mirava sotto l'altezza del gorilla:
+  qualunque posizione sotto veniva schiacciata sullo stesso angolo fisso (2°), dando la
+  sensazione che la freccia fosse "bloccata" e non scendesse mai. Corretto ripiegando in modo
+  continuo il semipiano inferiore su quello superiore (Math.abs(dy) invece di -dy in
+  angleFromPos). Riallineato anche il punto di riferimento della mira con quello usato per
+  il lancio effettivo.
+
+v1.0.0 — baseline
+------------------
+Stato del repository così come si trovava prima di questo lavoro di analisi e correzione
+(ultimo commit: "Update index.html"). Versione assegnata retroattivamente come punto di
+partenza.
