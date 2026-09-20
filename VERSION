@@ -1,4 +1,4 @@
-1.1.0
+1.1.1
 
 Changelog
 =========
@@ -7,6 +7,21 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.1.1 — 2026-09-20
+--------------------
+Due correzioni di dinamiche di gioco segnalate giocando su smartphone.
+
+Corretto:
+- Il gorilla poteva essere attraversato da una banana che visivamente lo colpiva: l'area di
+  collisione era un cerchio di appena 11-20px di raggio (a seconda dell'orientamento dello
+  schermo) centrato sul busto, molto più piccola dello sprite disegnato (circa 60x85px con
+  testa, braccia e gambe). Sostituita con un'ellisse (GOR_HIT_RX/RY) che copre testa, busto
+  e gran parte degli arti, restando comunque sotto la punta delle braccia tese.
+- Ripristinato il danno collaterale da esplosione: colpire un edificio abbastanza vicino a un
+  gorilla (anche il proprio) ora può ucciderlo anche senza un colpo diretto, come nel gioco
+  originale — incluso il "suicidio" facendo crollare il palazzo su cui si è appoggiati, che
+  assegna il punto all'avversario.
 
 v1.1.0 — 2026-09-20
 --------------------
