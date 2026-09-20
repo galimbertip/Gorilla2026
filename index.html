@@ -62,6 +62,10 @@ canvas{display:block;touch-action:none}
   font-size:8px;letter-spacing:4px;padding:5px 16px;pointer-events:none;white-space:nowrap}
 #vtag{position:absolute;bottom:6px;left:9px;color:#1e3040;font-size:7px;letter-spacing:2px;
   pointer-events:none;z-index:5;font-family:'Share Tech Mono',monospace}
+#mute{position:absolute;bottom:2px;right:6px;z-index:6;background:transparent;border:none;
+  font-size:14px;padding:8px;opacity:.45;cursor:pointer;line-height:1;
+  -webkit-tap-highlight-color:transparent}
+#mute:active{opacity:.8}
 </style>
 </head>
 <body>
@@ -99,12 +103,13 @@ canvas{display:block;touch-action:none}
   <div id="ct" class="hide"><div id="ch">⚡ TIENI PREMUTO · RILASCIA PER SPARARE</div></div>
   <div id="ai" class="hide">🤖 AI CALCOLA...</div>
   <div id="vtag"></div>
+  <button id="mute" aria-label="Attiva/disattiva audio">🔊</button>
 </div>
 <script>
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.1.1';
+const VERSION='1.2.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -123,6 +128,91 @@ function loadScores(){
 }
 function saveScores(){
   try{ localStorage.setItem('gorilla2026_scores', JSON.stringify(scores)); }catch(e){}
+}
+
+// ─── AUDIO (sintetizzato via Web Audio API, nessun file esterno da ospitare) ──
+let actx=null, muted=loadMuted();
+function loadMuted(){
+  try{ return localStorage.getItem('gorilla2026_muted')==='1'; }catch(e){ return false; }
+}
+function saveMuted(){
+  try{ localStorage.setItem('gorilla2026_muted', muted?'1':'0'); }catch(e){}
+}
+function ensureAudio(){
+  // Va richiamata da un gesto utente (click/touch): i browser bloccano l'audio
+  // finché non parte da un'interazione diretta della persona.
+  if(!actx){
+    try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx=null; }
+  }
+  if(actx&&actx.state==='suspended'){ try{ actx.resume(); }catch(e){} }
+  return actx;
+}
+function noiseBuffer(ctxA,dur){
+  const n=Math.max(1,Math.floor(ctxA.sampleRate*dur));
+  const buf=ctxA.createBuffer(1,n,ctxA.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  return buf;
+}
+function playThrow(){
+  if(muted) return;
+  const a=ensureAudio(); if(!a) return;
+  const t=a.currentTime;
+  const src=a.createBufferSource(); src.buffer=noiseBuffer(a,0.28);
+  const bp=a.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.1;
+  bp.frequency.setValueAtTime(2200,t); bp.frequency.exponentialRampToValueAtTime(320,t+0.26);
+  const g=a.createGain(); g.gain.setValueAtTime(0.001,t);
+  g.gain.exponentialRampToValueAtTime(0.5,t+0.03); g.gain.exponentialRampToValueAtTime(0.001,t+0.28);
+  src.connect(bp); bp.connect(g); g.connect(a.destination);
+  src.start(t); src.stop(t+0.3);
+}
+function playExplosion(big){
+  if(muted) return;
+  const a=ensureAudio(); if(!a) return;
+  const t=a.currentTime, dur=big?0.85:0.6;
+  // Boato: rumore filtrato passa-basso che scende di frequenza
+  const src=a.createBufferSource(); src.buffer=noiseBuffer(a,dur);
+  const lp=a.createBiquadFilter(); lp.type='lowpass';
+  lp.frequency.setValueAtTime(big?1800:1200,t); lp.frequency.exponentialRampToValueAtTime(80,t+dur);
+  const ng=a.createGain(); ng.gain.setValueAtTime(0.001,t);
+  ng.gain.exponentialRampToValueAtTime(big?0.9:0.6,t+0.02); ng.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(lp); lp.connect(ng); ng.connect(a.destination);
+  src.start(t); src.stop(t+dur+0.05);
+  // Colpo grave sotto il rumore, per dare peso all'esplosione
+  const osc=a.createOscillator(); osc.type='sine';
+  osc.frequency.setValueAtTime(big?110:90,t); osc.frequency.exponentialRampToValueAtTime(28,t+dur*0.9);
+  const og=a.createGain(); og.gain.setValueAtTime(0.001,t);
+  og.gain.exponentialRampToValueAtTime(big?0.7:0.45,t+0.015); og.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  osc.connect(og); og.connect(a.destination);
+  osc.start(t); osc.stop(t+dur+0.05);
+}
+function playVictory(){
+  if(muted) return;
+  const a=ensureAudio(); if(!a) return;
+  const t=a.currentTime;
+  // Piccolo arpeggio ascendente "8-bit"
+  [523.25,659.25,783.99,1046.5].forEach((freq,i)=>{
+    const st=t+i*0.11;
+    const osc=a.createOscillator(); osc.type='square'; osc.frequency.value=freq;
+    const g=a.createGain(); g.gain.setValueAtTime(0.0001,st);
+    g.gain.exponentialRampToValueAtTime(0.28,st+0.015); g.gain.exponentialRampToValueAtTime(0.0001,st+0.32);
+    osc.connect(g); g.connect(a.destination);
+    osc.start(st); osc.stop(st+0.34);
+  });
+}
+function playBlip(){
+  if(muted) return;
+  const a=ensureAudio(); if(!a) return;
+  const t=a.currentTime;
+  const osc=a.createOscillator(); osc.type='triangle'; osc.frequency.value=680;
+  const g=a.createGain(); g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.22,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.09);
+  osc.connect(g); g.connect(a.destination);
+  osc.start(t); osc.stop(t+0.1);
+}
+function vibrate(pattern){
+  if(muted) return;
+  try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
 }
 
 // ─── PALETTE ──────────────────────────────────────────────────
@@ -546,6 +636,7 @@ function doFire(angle,power){
     vel:{x:vx,y:vy},spin:0,safe:20
   };
   state.phase='flying';state.throwAnim=true;
+  playThrow();
 }
 
 function triggerExplosion(x,y,killed){
@@ -555,6 +646,8 @@ function triggerExplosion(x,y,killed){
     col:[C.expl,C.banana,'#ff2200','#ffaa00','#fff'][Math.floor(Math.random()*5)]
   }));
   state.explosion={x,y,t0:state.t,dur:1.1,killed};
+  playExplosion(killed!==-1);
+  vibrate(killed!==-1?[40,30,60]:[35]);
 }
 
 function show(s){
@@ -970,6 +1063,7 @@ function loop(){
       if(state.explosion.killed!==-1){
         state.killedPlayer=state.explosion.killed;
         state.phase='celebrating'; state.celebEnd=state.t+2.5;
+        playVictory();
       } else nextTurn();
     }
   }
@@ -1104,6 +1198,13 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('s0').textContent=scores[0];
   document.getElementById('s1').textContent=scores[1];
   document.getElementById('vtag').textContent='v'+VERSION;
+  const muteBtn=document.getElementById('mute');
+  muteBtn.textContent=muted?'🔇':'🔊';
+  muteBtn.addEventListener('click',()=>{
+    muted=!muted; saveMuted();
+    muteBtn.textContent=muted?'🔇':'🔊';
+    if(!muted){ ensureAudio(); playBlip(); }
+  });
   resize();
   window.addEventListener('resize',resize);
   window.addEventListener('orientationchange',()=>setTimeout(resize,250));
@@ -1114,10 +1215,11 @@ window.addEventListener('DOMContentLoaded',()=>{
   canvas.addEventListener('mousedown',onDown);
   canvas.addEventListener('mouseup',onUp);
   canvas.addEventListener('selectstart',e=>e.preventDefault());
-  document.getElementById('b1v1').addEventListener('click',()=>initGame('1v1'));
-  document.getElementById('bai').addEventListener('click',()=>initGame('vsAI'));
-  document.getElementById('rb').addEventListener('click',()=>initGame());
+  document.getElementById('b1v1').addEventListener('click',()=>{ ensureAudio(); playBlip(); initGame('1v1'); });
+  document.getElementById('bai').addEventListener('click',()=>{ ensureAudio(); playBlip(); initGame('vsAI'); });
+  document.getElementById('rb').addEventListener('click',()=>{ ensureAudio(); playBlip(); initGame(); });
   document.getElementById('mb2').addEventListener('click',()=>{
+    ensureAudio(); playBlip();
     scores=[0,0];
     saveScores();
     document.getElementById('s0').textContent='0';
