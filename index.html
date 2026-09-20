@@ -5,7 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gorilla">
+<meta name="theme-color" content="#070712">
 <title>GORILLA 2026</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon.ico" sizes="32x32">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/icon-167.png">
+<link rel="apple-touch-icon" sizes="120x120" href="icons/icon-120.png">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -51,6 +60,8 @@ canvas{display:block;touch-action:none}
 #ai{position:absolute;top:60px;left:50%;transform:translateX(-50%);
   background:rgba(2,4,14,.9);border:1px solid #ff2d6f44;color:#ff2d6f;
   font-size:8px;letter-spacing:4px;padding:5px 16px;pointer-events:none;white-space:nowrap}
+#vtag{position:absolute;bottom:6px;left:9px;color:#1e3040;font-size:7px;letter-spacing:2px;
+  pointer-events:none;z-index:5;font-family:'Share Tech Mono',monospace}
 </style>
 </head>
 <body>
@@ -70,7 +81,7 @@ canvas{display:block;touch-action:none}
       <div>🖱 <span class="c2">Tieni premuto</span> → carica la potenza</div>
       <div>🖱 <span class="c3">Rilascia</span> → spara!</div>
     </div>
-    <div class="cr">INSPIRED BY GORILLAS.BAS — DOS 1991</div>
+    <div class="cr">INSPIRED BY GORILLAS.BAS — DOS 1990</div>
   </div>
   <div class="ov hide" id="go">
     <div class="rl">round over</div>
@@ -87,18 +98,32 @@ canvas{display:block;touch-action:none}
   </div>
   <div id="ct" class="hide"><div id="ch">⚡ TIENI PREMUTO · RILASCIA PER SPARARE</div></div>
   <div id="ai" class="hide">🤖 AI CALCOLA...</div>
+  <div id="vtag"></div>
 </div>
 <script>
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const GRAV=9.8, DT=0.042, N_BLDG=9;
+const VERSION='1.1.0';
+const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
 const SW=26, TH=16; // side width, top height
 
 let CW=700,CH=390,GW=48,GH=60,EXPL_R=36;
 let canvas,ctx,state=null,scores=[0,0],raf=null,drag=null,mode='1v1';
+
+// ─── SCORE PERSISTENCE ──────────────────────────────────────────
+function loadScores(){
+  try{
+    const raw=JSON.parse(localStorage.getItem('gorilla2026_scores'));
+    if(Array.isArray(raw)&&raw.length===2&&Number.isFinite(raw[0])&&Number.isFinite(raw[1])) return raw;
+  }catch(e){}
+  return [0,0];
+}
+function saveScores(){
+  try{ localStorage.setItem('gorilla2026_scores', JSON.stringify(scores)); }catch(e){}
+}
 
 // ─── PALETTE ──────────────────────────────────────────────────
 const C={p1:'#00f5c8',p2:'#ff2d6f',banana:'#ffd000',expl:'#ff5500'};
@@ -414,7 +439,7 @@ function stepBanana(b,wind){
 function hitBuilding(pos,bs){
   for(let i=0;i<bs.length;i++){
     const b=bs[i];
-    if(pos.x>=b.x&&pos.x<=b.x+b.w&&pos.y>=b.y&&pos.y<=CH-14){
+    if(pos.x>=b.x&&pos.x<=b.x+b.w&&pos.y>=b.y&&pos.y<=CH-ROAD_H){
       // FIX: pass through existing craters
       const inCrater=b.craters.some(cr=>Math.hypot(pos.x-cr.cx,pos.y-cr.cy)<cr.r*.85);
       if(!inCrater) return i;
@@ -452,10 +477,13 @@ function computeAI(){
   const src=state.gorillas[1],tgt=state.gorillas[0];
   const sx=src.x+GW/2,sy=src.y+GH*.28,tx=tgt.x+GW/2,ty=tgt.y+GH/2;
   let bA=90,bP=55,bD=Infinity;
-  for(let a=5;a<=175;a+=2) for(let p=20;p<=100;p+=4){
+  // Griglia diradata (era 2°/4%/300 step ≈ 540k iterazioni nel caso peggiore,
+  // percepibile come uno scatto sul thread principale su mobile di fascia bassa):
+  // 4°/8%/200 step taglia il caso peggiore di circa 6× mantenendo una mira quasi identica.
+  for(let a=5;a<=175;a+=4) for(let p=20;p<=100;p+=8){
     const rad=(180-a)*Math.PI/180,spd=p*1.55;
     let px=sx,py=sy,pvx=Math.cos(-rad)*spd,pvy=Math.sin(-rad)*spd,md=Infinity;
-    for(let s=0;s<300;s++){
+    for(let s=0;s<200;s++){
       pvx+=state.wind*DT;pvy+=GRAV*DT;px+=pvx*DT;py+=pvy*DT;
       if(px<0||px>CW||py>CH) break;
       const d=Math.hypot(px-tx,py-ty);
@@ -636,18 +664,18 @@ function drawBuildings(){
 
 // ─── DRAW: ROAD ───────────────────────────────────────────────
 function drawRoad(){
-  const rg=ctx.createLinearGradient(0,CH-24,0,CH);
+  const rg=ctx.createLinearGradient(0,CH-ROAD_H,0,CH);
   rg.addColorStop(0,'#0b1220'); rg.addColorStop(1,'#050810');
-  ctx.fillStyle=rg; ctx.fillRect(0,CH-24,CW,24);
+  ctx.fillStyle=rg; ctx.fillRect(0,CH-ROAD_H,CW,ROAD_H);
   ctx.strokeStyle='rgba(0,200,160,.28)'; ctx.lineWidth=1.5; ctx.shadowColor='#00f5c8'; ctx.shadowBlur=5;
-  ctx.beginPath(); ctx.moveTo(0,CH-24); ctx.lineTo(CW,CH-24); ctx.stroke(); ctx.shadowBlur=0;
+  ctx.beginPath(); ctx.moveTo(0,CH-ROAD_H); ctx.lineTo(CW,CH-ROAD_H); ctx.stroke(); ctx.shadowBlur=0;
   ctx.setLineDash([22,16]); ctx.strokeStyle='rgba(255,190,0,.22)'; ctx.lineWidth=1.5;
   ctx.beginPath(); ctx.moveTo(0,CH-12); ctx.lineTo(CW,CH-12); ctx.stroke(); ctx.setLineDash([]);
   // per-building wet reflections
   state.buildings.forEach(b=>{
-    const rc=ctx.createLinearGradient(b.x+b.w/2,CH-24,b.x+b.w/2,CH);
+    const rc=ctx.createLinearGradient(b.x+b.w/2,CH-ROAD_H,b.x+b.w/2,CH);
     rc.addColorStop(0,b.pal.sign+'1a'); rc.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=rc; ctx.fillRect(b.x+b.w/2-12,CH-24,24,24);
+    ctx.fillStyle=rc; ctx.fillRect(b.x+b.w/2-12,CH-ROAD_H,ROAD_H,ROAD_H);
   });
 }
 
@@ -909,7 +937,8 @@ function loop(){
     for(let i=0;i<3;i++){
       state.banana=stepBanana(state.banana,state.wind);
       const pos=state.banana.pos;
-      if(pos.x<-50||pos.x>CW+50||pos.y>CH+50){nextTurn();break;}
+      if(pos.x<-50||pos.x>CW+50||pos.y>CH+80){nextTurn();break;} // fuori schermo lateralmente: nessun impatto
+      if(pos.y>=CH-ROAD_H){triggerExplosion(pos.x,CH-ROAD_H,-1);break;} // impatto a terra: ora visibile invece di sparire senza feedback
       const gh=hitGorilla(pos,state.gorillas,state.turn,state.banana);
       if(gh!==-1){triggerExplosion(pos.x,pos.y,gh);break;}
       const bh=hitBuilding(pos,state.buildings);
@@ -928,6 +957,7 @@ function loop(){
     const killed=state.killedPlayer;
     const winner=(killed===state.turn)?1-state.turn:state.turn;
     scores[winner]++;
+    saveScores();
     document.getElementById('s0').textContent=scores[0];
     document.getElementById('s1').textContent=scores[1];
     const wn=mode==='vsAI'&&winner===1?'AI':`P${winner+1}`;
@@ -957,17 +987,37 @@ function loop(){
 // ─── INPUT ────────────────────────────────────────────────────
 function resize(){
   const vw=window.innerWidth,vh=window.innerHeight;
-  CW=vw>=vh?700:390; CH=vw>=vh?390:700;
+  const newCW=vw>=vh?700:390, newCH=vw>=vh?390:700;
+  const orientationChanged=(newCW!==CW||newCH!==CH);
+  const oldCW=CW, oldCH=CH;
+  CW=newCW; CH=newCH;
   EXPL_R=Math.round(CW*.052);
   const scale=Math.min(vw/CW,vh/CH);
   canvas.width=CW; canvas.height=CH;
   canvas.style.width=Math.round(CW*scale)+'px';
   canvas.style.height=Math.round(CH*scale)+'px';
   if(state&&state.phase!=='done'){
-    const b=buildCity(); b.forEach(bld=>renderBuilding(bld));
-    state.buildings=b; state.gorillas=placeGorillas(b); state.stars=genStars(70);
-    if(state.phase==='flying'||state.phase==='exploding'){
-      state.phase='aiming'; state.banana=null; state.explosion=null; state.throwAnim=false;
+    // Prima qui si rigenerava una città random ad ogni resize (anche solo per la
+    // tastiera virtuale che si apre), cancellando i crateri di una partita in corso.
+    // Ora si ridimensiona la città esistente e si tocca la partita solo se
+    // l'orientamento è davvero cambiato (le coordinate logiche non sono più valide).
+    if(orientationChanged){
+      const sx=CW/oldCW, sy=CH/oldCH;
+      state.buildings.forEach(b=>{
+        const newX=b.x*sx, newH=b.h*sy, newW=b.w*sx, newY=CH-newH;
+        b.craters.forEach(cr=>{
+          cr.cx=newX+(cr.cx-b.x)*sx;
+          cr.cy=newY+(cr.cy-b.y)*sy;
+          cr.r*=(sx+sy)/2;
+        });
+        b.x=newX; b.y=newY; b.w=newW; b.h=newH;
+        renderBuilding(b);
+      });
+      state.gorillas=placeGorillas(state.buildings);
+      state.stars.forEach(s=>{ s.x*=sx; s.y*=sy; });
+      if(state.phase==='flying'||state.phase==='exploding'){
+        state.phase='aiming'; state.banana=null; state.explosion=null; state.throwAnim=false;
+      }
     }
     show('playing');
   } else if(!state) show('title');
@@ -1030,6 +1080,10 @@ function updateCharge(){
 window.addEventListener('DOMContentLoaded',()=>{
   canvas=document.getElementById('gc');
   ctx=canvas.getContext('2d');
+  scores=loadScores();
+  document.getElementById('s0').textContent=scores[0];
+  document.getElementById('s1').textContent=scores[1];
+  document.getElementById('vtag').textContent='v'+VERSION;
   resize();
   window.addEventListener('resize',resize);
   window.addEventListener('orientationchange',()=>setTimeout(resize,250));
@@ -1045,6 +1099,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('rb').addEventListener('click',()=>initGame());
   document.getElementById('mb2').addEventListener('click',()=>{
     scores=[0,0];
+    saveScores();
     document.getElementById('s0').textContent='0';
     document.getElementById('s1').textContent='0';
     state=null; show('title');
