@@ -980,11 +980,17 @@ function getPos(e){
 }
 function angleFromPos(pos){
   const g=state.gorillas[state.turn];
-  const gx=g.x+GW/2, gy=g.y+GH*.2;
+  const gx=g.x+GW/2, gy=g.y+GH*.28;
   const dx=pos.x-gx, dy=pos.y-gy;
+  // A banana can only ever be launched level or upward (gravity does the rest),
+  // so any pointer position below the gorilla folds onto the same achievable
+  // angle as the mirrored position above it — Math.abs(dy) instead of -dy.
+  // Without this fold, every point below the gorilla snapped to a single fixed
+  // near-horizontal angle, which is why the aim arrow looked "stuck" and never
+  // followed the pointer downward.
   let deg;
-  if(state.turn===0) deg=Math.atan2(-dy,dx)*180/Math.PI;
-  else deg=Math.atan2(-dy,-dx)*180/Math.PI;
+  if(state.turn===0) deg=Math.atan2(Math.abs(dy),dx)*180/Math.PI;
+  else deg=Math.atan2(Math.abs(dy),-dx)*180/Math.PI;
   return Math.max(2,Math.min(178,deg));
 }
 function onHover(e){
