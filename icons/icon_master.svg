@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a1830"/>
+      <stop offset="0.55" stop-color="#050a18"/>
+      <stop offset="1" stop-color="#02040a"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00f5c8"/>
+      <stop offset="0.55" stop-color="#39b8ff"/>
+      <stop offset="1" stop-color="#ff2d6f"/>
+    </linearGradient>
+    <linearGradient id="neonEar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00f5c8"/>
+      <stop offset="1" stop-color="#0088c8"/>
+    </linearGradient>
+    <linearGradient id="banana" x1="0" y1="-34" x2="0" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff7a0"/>
+      <stop offset="0.45" stop-color="#ffd000"/>
+      <stop offset="1" stop-color="#c87800"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glowSoft" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <ellipse cx="256" cy="258" rx="168" ry="150" fill="#00f5c8" opacity="0.16" filter="url(#glowSoft)"/>
+
+  <g opacity="0.5">
+    <rect x="34"  y="396" width="44" height="56" fill="#0d1f35"/>
+    <rect x="86"  y="372" width="38" height="80" fill="#0d1f35"/>
+    <rect x="390" y="382" width="40" height="70" fill="#0d1f35"/>
+    <rect x="436" y="400" width="44" height="52" fill="#0d1f35"/>
+  </g>
+  <rect x="0" y="448" width="512" height="5" fill="#00f5c8" opacity="0.5" filter="url(#glow)"/>
+
+  <!-- ears (behind head) -->
+  <g filter="url(#glow)">
+    <circle cx="126" cy="242" r="46" fill="url(#neonEar)"/>
+    <circle cx="386" cy="242" r="46" fill="url(#neonEar)"/>
+  </g>
+  <circle cx="126" cy="242" r="22" fill="#04070d"/>
+  <circle cx="386" cy="242" r="22" fill="#04070d"/>
+
+  <!-- head silhouette: wide jaw, domed crest -->
+  <g filter="url(#glow)">
+    <path d="M 256 78
+             C 205 78 176 104 170 140
+             C 146 150 132 178 132 214
+             C 132 260 150 292 168 312
+             C 176 358 212 396 256 396
+             C 300 396 336 358 344 312
+             C 362 292 380 260 380 214
+             C 380 178 366 150 342 140
+             C 336 104 307 78 256 78 Z"
+          fill="url(#neon)"/>
+  </g>
+
+  <!-- brow ridge -->
+  <path d="M 168 234 C 195 210 230 202 256 202 C 282 202 317 210 344 234
+           C 344 250 332 258 318 250 C 296 236 276 230 256 230
+           C 236 230 216 236 194 250 C 180 258 168 250 168 234 Z"
+        fill="#040608"/>
+
+  <!-- eyes -->
+  <circle cx="214" cy="236" r="7" fill="#00f5c8"/>
+  <circle cx="298" cy="236" r="7" fill="#ff2d6f"/>
+
+  <!-- muzzle -->
+  <path d="M 190 288
+           C 190 260 218 246 256 246
+           C 294 246 322 260 322 288
+           C 322 330 296 360 256 360
+           C 216 360 190 330 190 288 Z"
+        fill="#050810"/>
+  <path d="M 206 292 C 206 272 228 262 256 262 C 284 262 306 272 306 292
+           C 306 322 284 344 256 344 C 228 344 206 322 206 292 Z"
+        fill="#0e1826"/>
+  <ellipse cx="234" cy="294" rx="9" ry="6" fill="#000"/>
+  <ellipse cx="278" cy="294" rx="9" ry="6" fill="#000"/>
+  <path d="M 226 322 Q 256 340 286 322" stroke="#000" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+  <!-- banana accent: same crescent formula as the in-game sprite -->
+  <g transform="translate(398,380) rotate(32) scale(1.05)" filter="url(#glow)">
+    <path d="M -30.76 -14.48 A 34 34 0 0 1 30.76 -14.48 L 16.29 -7.66 A 18 18 0 0 0 -16.29 -7.66 Z" fill="url(#banana)"/>
+    <circle cx="-30.76" cy="-14.48" r="3.4" fill="#7a4400"/>
+    <circle cx="30.76" cy="-14.48" r="3.4" fill="#7a4400"/>
+  </g>
+</svg>
