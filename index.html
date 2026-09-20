@@ -104,7 +104,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.1.0';
+const VERSION='1.1.1';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -448,12 +448,23 @@ function hitBuilding(pos,bs){
   return -1;
 }
 
+// Ellisse di collisione del gorilla: prima era un cerchio di raggio EXPL_R*.55
+// (11-20px a seconda dell'orientamento) centrato sul busto, molto più piccolo
+// dello sprite disegnato (che con braccia/testa/gambe occupa circa 60x85px) —
+// per questo una banana poteva attraversare visivamente il gorilla senza
+// contare come colpo. Questi raggi coprono testa+busto+gran parte degli arti
+// restando comunque sotto la punta delle braccia tese, così un tiro che sfiora
+// appena la punta di un dito non conta come centro pieno.
+const GOR_HIT_RX=GW*0.55, GOR_HIT_RY=GH*0.63;
+function inGorillaHitbox(px,py,g){
+  const dx=px-(g.x+GW/2), dy=py-(g.y+GH/2);
+  return (dx*dx)/(GOR_HIT_RX*GOR_HIT_RX)+(dy*dy)/(GOR_HIT_RY*GOR_HIT_RY) < 1;
+}
 function hitGorilla(pos,gors,shooter,banana){
   const safe=banana&&banana.safe>0;
   const order=safe?[1-shooter]:[1-shooter,shooter];
   for(const i of order){
-    const g=gors[i],dx=pos.x-(g.x+GW/2),dy=pos.y-(g.y+GH/2);
-    if(Math.hypot(dx,dy)<EXPL_R*.55) return i;
+    if(inGorillaHitbox(pos.x,pos.y,gors[i])) return i;
   }
   return -1;
 }
@@ -942,7 +953,16 @@ function loop(){
       const gh=hitGorilla(pos,state.gorillas,state.turn,state.banana);
       if(gh!==-1){triggerExplosion(pos.x,pos.y,gh);break;}
       const bh=hitBuilding(pos,state.buildings);
-      if(bh!==-1){blastBuilding(state.buildings[bh],pos.x,pos.y,EXPL_R);triggerExplosion(pos.x,pos.y,-1);break;}
+      if(bh!==-1){
+        blastBuilding(state.buildings[bh],pos.x,pos.y,EXPL_R);
+        // Danno collaterale: come nell'originale, far crollare un palazzo troppo
+        // vicino a un gorilla (anche il proprio) può ucciderlo anche senza un
+        // colpo diretto. Controlla entrambi i gorilla, shooter incluso.
+        let splashKilled=-1;
+        for(const i of [0,1]){ if(inGorillaHitbox(pos.x,pos.y,state.gorillas[i])){ splashKilled=i; break; } }
+        triggerExplosion(pos.x,pos.y,splashKilled);
+        break;
+      }
     }
   }
   if(state.phase==='exploding'){
