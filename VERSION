@@ -1,4 +1,4 @@
-1.1.1
+1.2.0
 
 Changelog
 =========
@@ -7,6 +7,25 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.2.0 — 2026-09-20
+--------------------
+Il gioco non è più muto: audio ed emojis, aggiungo feedback sonoro e aptico.
+
+Aggiunto:
+- Effetti sonori sintetizzati via Web Audio API (nessun file audio esterno da ospitare,
+  tutto generato al volo con oscillatori/rumore filtrato): "whoosh" al lancio della banana,
+  "boom" all'esplosione (più intenso se colpisce un gorilla), jingle di 4 note in stile
+  8-bit alla vittoria, click leggero sui pulsanti del menu.
+- Vibrazione dello smartphone (navigator.vibrate) quando una banana colpisce un gorilla o
+  esplode; nessun effetto sui dispositivi che non la supportano (es. iPhone/Safari), gestito
+  con un semplice controllo di disponibilità.
+- Pulsante muto/attivo in basso a destra, con icona 🔊/🔇 e preferenza salvata tra una
+  sessione e l'altra (localStorage), così l'audio riparte com'era stato lasciato.
+
+Nota tecnica: la creazione del contesto audio è agganciata a un gesto dell'utente (tap sui
+pulsanti del menu o primo lancio), come richiesto dalle policy anti-autoplay dei browser
+mobili; se il contesto non può essere creato il gioco resta comunque silenzioso senza errori.
 
 v1.1.1 — 2026-09-20
 --------------------
