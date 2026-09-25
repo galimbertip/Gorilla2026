@@ -39,6 +39,12 @@ canvas{display:block;touch-action:none}
 .mb.c2{border-color:#ff2d6f;color:#ff2d6f;box-shadow:0 0 20px #ff2d6f18,inset 0 0 20px #ff2d6f0a}
 .mb:hover{filter:brightness(1.4);transform:translateY(-2px)}
 .mb small{font-size:7px;opacity:.5;display:block}
+.lr{display:flex;gap:8px;margin-top:6px}
+.lc{padding:7px 14px;background:rgba(0,0,0,.5);border:1px solid #152030;color:#3a4a58;
+  font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;border-radius:4px;
+  cursor:pointer;transition:all .2s}
+.lc:hover{filter:brightness(1.5)}
+.lc.on{border-color:#ffd000;color:#ffd000;box-shadow:0 0 14px #ffd00022,inset 0 0 10px #ffd00010}
 .tip{display:flex;flex-direction:column;gap:5px;font-size:8px;text-align:center;margin-top:10px;color:#1e3040;line-height:2.1}
 .c1{color:#00f5c8}.c2{color:#ff2d6f}.c3{color:#ffd000}
 .cr{font-size:7px;color:#0d1a24;letter-spacing:3px;margin-top:12px}
@@ -49,6 +55,8 @@ canvas{display:block;touch-action:none}
 .sv{font-family:'Orbitron',sans-serif;font-size:clamp(22px,6vw,38px);font-weight:900;text-align:center}
 .sl{font-size:7px;letter-spacing:4px;color:#152030;text-align:center;margin-top:4px}
 .ss{color:#0a1828;font-size:28px}
+.mt{font-family:'Orbitron',sans-serif;font-size:clamp(13px,3.2vw,19px);font-weight:900;
+  letter-spacing:2px;text-transform:uppercase;margin-top:2px}
 .br{display:flex;gap:14px;margin-top:14px}
 .bn{padding:12px 28px;background:rgba(0,0,0,.5);font-family:'Share Tech Mono',monospace;
   font-size:10px;letter-spacing:3px;cursor:pointer;border-radius:4px;transition:all .2s;border:1px solid}
@@ -60,7 +68,7 @@ canvas{display:block;touch-action:none}
 #ai{position:absolute;top:60px;left:50%;transform:translateX(-50%);
   background:rgba(2,4,14,.9);border:1px solid #ff2d6f44;color:#ff2d6f;
   font-size:8px;letter-spacing:4px;padding:5px 16px;pointer-events:none;white-space:nowrap}
-#vtag{position:absolute;bottom:6px;left:9px;color:#1e3040;font-size:7px;letter-spacing:2px;
+#vtag{position:absolute;bottom:6px;left:9px;color:#00f5c8;opacity:.55;font-size:9px;letter-spacing:2px;
   pointer-events:none;z-index:5;font-family:'Share Tech Mono',monospace}
 #mute{position:absolute;bottom:2px;right:6px;z-index:6;background:transparent;border:none;
   font-size:14px;padding:8px;opacity:.45;cursor:pointer;line-height:1;
@@ -75,6 +83,13 @@ canvas{display:block;touch-action:none}
     <div class="ed">◈ 2026 EDITION ◈</div>
     <div class="tm">GORILLA</div>
     <div class="ts2">THE BANANA WARS</div>
+    <div class="ml">— quante partite? —</div>
+    <div class="lr" id="lenRow">
+      <button class="lc" data-len="1">1</button>
+      <button class="lc" data-len="3">3</button>
+      <button class="lc" data-len="5">5</button>
+      <button class="lc" data-len="7">7</button>
+    </div>
     <div class="ml">— scegli modalità —</div>
     <div class="mr">
       <button class="mb c1" id="b1v1">👥 1 vs 1<small>stesso schermo</small></button>
@@ -88,13 +103,14 @@ canvas{display:block;touch-action:none}
     <div class="cr">INSPIRED BY GORILLAS.BAS — DOS 1990</div>
   </div>
   <div class="ov hide" id="go">
-    <div class="rl">round over</div>
+    <div class="rl" id="rl">round over</div>
     <div class="wt" id="wt"></div>
     <div class="sr">
       <div><div class="sv c1" id="s0">0</div><div class="sl" id="l0">P1</div></div>
       <div class="ss">:</div>
       <div><div class="sv c2" id="s1">0</div><div class="sl" id="l1">P2</div></div>
     </div>
+    <div class="mt hide" id="mt"></div>
     <div class="br">
       <button class="bn bp" id="rb">REMATCH</button>
       <button class="bn bs" id="mb2">MENU</button>
@@ -109,7 +125,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.3.0';
+const VERSION='1.4.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -117,17 +133,26 @@ const SW=26, TH=16; // side width, top height
 
 let CW=700,CH=390,GW=48,GH=60,EXPL_R=36;
 let canvas,ctx,state=null,scores=[0,0],raf=null,drag=null,mode='1v1';
+// Un "match" è composto da matchLen partite singole; gamesPlayed conta quelle
+// già giocate nel match corrente. Al raggiungimento di matchLen il punteggio
+// viene annunciato e poi azzerato per il match successivo (vedi loop() e i
+// pulsanti REMATCH/MENU più sotto).
+let matchLen=3, gamesPlayed=0;
 
-// ─── SCORE PERSISTENCE ──────────────────────────────────────────
-function loadScores(){
+// ─── PERSISTENZA MATCH (punteggio, partite giocate, formato scelto) ──────
+function loadMatch(){
   try{
-    const raw=JSON.parse(localStorage.getItem('gorilla2026_scores'));
-    if(Array.isArray(raw)&&raw.length===2&&Number.isFinite(raw[0])&&Number.isFinite(raw[1])) return raw;
+    const raw=JSON.parse(localStorage.getItem('gorilla2026_match'));
+    if(raw&&Array.isArray(raw.scores)&&raw.scores.length===2&&
+       Number.isFinite(raw.scores[0])&&Number.isFinite(raw.scores[1])&&
+       Number.isFinite(raw.gamesPlayed)&&[1,3,5,7].includes(raw.matchLen)){
+      return raw;
+    }
   }catch(e){}
-  return [0,0];
+  return {scores:[0,0],gamesPlayed:0,matchLen:3};
 }
-function saveScores(){
-  try{ localStorage.setItem('gorilla2026_scores', JSON.stringify(scores)); }catch(e){}
+function saveMatch(){
+  try{ localStorage.setItem('gorilla2026_match', JSON.stringify({scores,gamesPlayed,matchLen})); }catch(e){}
 }
 
 // ─── AUDIO (sintetizzato via Web Audio API, nessun file esterno da ospitare) ──
@@ -1201,7 +1226,8 @@ function loop(){
     const killed=state.killedPlayer;
     const winner=(killed===state.turn)?1-state.turn:state.turn;
     scores[winner]++;
-    saveScores();
+    gamesPlayed++;
+    saveMatch();
     document.getElementById('s0').textContent=scores[0];
     document.getElementById('s1').textContent=scores[1];
     const wn=mode==='vsAI'&&winner===1?'AI':`P${winner+1}`;
@@ -1209,6 +1235,30 @@ function loop(){
     wtel.textContent=killed===state.turn?`💀 ${mode==='vsAI'&&state.turn===1?'AI':'P'+(state.turn+1)} SUICIDIO!`:`${wn} VINCE!`;
     wtel.style.color=winner===0?C.p1:C.p2;
     wtel.style.textShadow=`0 0 36px ${winner===0?C.p1:C.p2}`;
+    // Fine partita singola o fine match? Il conteggio del punteggio riparte
+    // da zero solo quando il match (matchLen partite) è concluso — vedi i
+    // pulsanti REMATCH/MENU più sotto, che eseguono l'azzeramento vero e
+    // proprio prima di iniziare il prossimo match.
+    const rlEl=document.getElementById('rl'), mtEl=document.getElementById('mt'), rbBtn=document.getElementById('rb');
+    if(gamesPlayed>=matchLen){
+      rlEl.textContent='match finito';
+      let matchCol;
+      if(scores[0]===scores[1]){
+        mtEl.textContent=`🤝 PAREGGIO ${scores[0]}-${scores[1]}`; matchCol='#ffd000';
+      } else {
+        const mWinner=scores[0]>scores[1]?0:1;
+        const mwn=mode==='vsAI'&&mWinner===1?'AI':`P${mWinner+1}`;
+        matchCol=mWinner===0?C.p1:C.p2;
+        mtEl.textContent=`🏆 ${mwn} VINCE IL MATCH ${scores[0]}-${scores[1]}`;
+      }
+      mtEl.style.color=matchCol; mtEl.style.textShadow=`0 0 20px ${matchCol}`;
+      mtEl.classList.remove('hide');
+      rbBtn.textContent='NUOVA PARTITA';
+    } else {
+      rlEl.textContent=`partita ${gamesPlayed} di ${matchLen}`;
+      mtEl.classList.add('hide');
+      rbBtn.textContent='PROSSIMA PARTITA';
+    }
     state.phase='done'; show('gameover');
   }
   updateCharge();
@@ -1321,10 +1371,17 @@ function updateCharge(){
   state.powers[state.turn]=Math.max(0,Math.min(100,pwr));
 }
 
+function resetMatch(){
+  scores=[0,0]; gamesPlayed=0; saveMatch();
+  document.getElementById('s0').textContent='0';
+  document.getElementById('s1').textContent='0';
+}
+
 window.addEventListener('DOMContentLoaded',()=>{
   canvas=document.getElementById('gc');
   ctx=canvas.getContext('2d');
-  scores=loadScores();
+  const saved=loadMatch();
+  scores=saved.scores; gamesPlayed=saved.gamesPlayed; matchLen=saved.matchLen;
   document.getElementById('s0').textContent=scores[0];
   document.getElementById('s1').textContent=scores[1];
   document.getElementById('vtag').textContent='v'+VERSION;
@@ -1345,15 +1402,33 @@ window.addEventListener('DOMContentLoaded',()=>{
   canvas.addEventListener('mousedown',onDown);
   canvas.addEventListener('mouseup',onUp);
   canvas.addEventListener('selectstart',e=>e.preventDefault());
-  document.getElementById('b1v1').addEventListener('click',()=>{ ensureAudio(); playBlip(); initGame('1v1'); });
-  document.getElementById('bai').addEventListener('click',()=>{ ensureAudio(); playBlip(); initGame('vsAI'); });
-  document.getElementById('rb').addEventListener('click',()=>{ ensureAudio(); playBlip(); initGame(); });
+  // Chip "quante partite?" nella schermata iniziale: scelgono il formato
+  // del prossimo match (1/3/5/7 partite singole). La scelta viene ricordata.
+  const lenBtns=Array.from(document.querySelectorAll('.lc'));
+  lenBtns.forEach(b=>b.classList.toggle('on',parseInt(b.dataset.len,10)===matchLen));
+  lenBtns.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      ensureAudio(); playBlip();
+      matchLen=parseInt(btn.dataset.len,10);
+      lenBtns.forEach(b=>b.classList.toggle('on',b===btn));
+      saveMatch();
+    });
+  });
+  // "1 vs 1"/"vs AI" dalla schermata iniziale avviano sempre un match nuovo:
+  // il punteggio riparte da zero (non è un "rematch" a metà match).
+  document.getElementById('b1v1').addEventListener('click',()=>{ ensureAudio(); playBlip(); resetMatch(); initGame('1v1'); });
+  document.getElementById('bai').addEventListener('click',()=>{ ensureAudio(); playBlip(); resetMatch(); initGame('vsAI'); });
+  document.getElementById('rb').addEventListener('click',()=>{
+    ensureAudio(); playBlip();
+    // Se il match era già arrivato a matchLen partite, questo pulsante
+    // ("NUOVA PARTITA") azzera il punteggio prima di ricominciare; a metà
+    // match ("PROSSIMA PARTITA") si limita a far partire la partita seguente.
+    if(gamesPlayed>=matchLen) resetMatch();
+    initGame();
+  });
   document.getElementById('mb2').addEventListener('click',()=>{
     ensureAudio(); playBlip();
-    scores=[0,0];
-    saveScores();
-    document.getElementById('s0').textContent='0';
-    document.getElementById('s1').textContent='0';
+    resetMatch();
     state=null; show('title');
   });
   raf=requestAnimationFrame(loop);
