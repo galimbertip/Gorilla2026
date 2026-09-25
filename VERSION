@@ -1,4 +1,4 @@
-1.3.0
+1.4.0
 
 Changelog
 =========
@@ -7,6 +7,40 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.4.0 — 2026-09-25
+--------------------
+Punteggio a "match" invece che infinito, e numero di versione reso visibile.
+
+Aggiunto:
+- Numero di versione reso leggibile: era già mostrato in basso a sinistra dal v1.1.0, ma
+  con un colore quasi identico allo sfondo (`#1e3040` su un fondo quasi nero) e 7px di
+  altezza — di fatto invisibile. Ora è in ciano a contrasto leggibile (9px, opacità .55),
+  stessa posizione discreta in basso a sinistra.
+- Scelta del formato del match: nella schermata iniziale, sopra la scelta 1 vs 1 / vs AI,
+  quattro pulsanti "1 / 3 / 5 / 7" per decidere quante partite singole compongono il match
+  (default 3, scelta ricordata tra le sessioni). Ogni volta che si preme "1 vs 1" o "vs AI"
+  dal menu principale si parte con un match nuovo, punteggio a 0-0.
+- Schermata di fine partita ora distingue partita singola e fine match: durante il match
+  mostra "partita X di N" e il pulsante "PROSSIMA PARTITA" (il punteggio prosegue); alla
+  partita che chiude il match mostra "match finito", un banner con il vincitore del match
+  e il punteggio finale (es. "🏆 P1 VINCE IL MATCH 2-1", o "🤝 PAREGGIO" a parità), e il
+  pulsante diventa "NUOVA PARTITA".
+
+Corretto:
+- Il punteggio non si azzerava mai da solo: prima continuava a sommarsi all'infinito tra
+  una partita e l'altra finché non si tornava manualmente al menu. Ora si azzera in automatico
+  al termine del numero di partite scelto (quando si preme "NUOVA PARTITA" o "MENU" dalla
+  schermata di fine match) — il punteggio del match appena concluso resta visibile fino a quel
+  momento, così il risultato finale si vede sempre prima del reset.
+
+Verificato con un test automatico (Node + jsdom) che simula un match intero al meglio di 3
+partite (round misti fra P1 e P2, incluso un pareggio temporaneo 1-1) più un match a 1 sola
+partita: punteggio e conteggio partite corretti ad ogni passaggio, etichette "partita X di N"
+poi "match finito" al momento giusto, "PROSSIMA PARTITA" non azzera il punteggio a metà match
+mentre "NUOVA PARTITA"/"MENU" lo azzerano solo a match concluso. Rieseguiti anche i test delle
+correzioni precedenti (hitbox, danno collaterale, tunneling, audio): tutti ancora validi, dato
+che questo giro non tocca fisica/collisioni/audio.
 
 v1.3.0 — 2026-09-24
 --------------------
