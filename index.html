@@ -109,7 +109,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.2.0';
+const VERSION='1.3.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -518,11 +518,16 @@ function genStars(n){
 
 // ─── PHYSICS ──────────────────────────────────────────────────
 function stepBanana(b,wind){
+  // Scia: memorizza le ultime posizioni per disegnare uno strascico dietro
+  // la banana in volo (puramente estetico, non influisce sulla fisica/collisioni).
+  const trail=(b.trail||[]).concat([{x:b.pos.x,y:b.pos.y}]);
+  if(trail.length>12) trail.shift();
   return{
     pos:{x:b.pos.x+b.vel.x*DT,y:b.pos.y+b.vel.y*DT},
     vel:{x:b.vel.x+wind*DT,y:b.vel.y+GRAV*DT},
     spin:b.spin+DT*9,
-    safe:Math.max(0,(b.safe||0)-1)
+    safe:Math.max(0,(b.safe||0)-1),
+    trail
   };
 }
 
@@ -658,6 +663,22 @@ function show(s){
 }
 
 // ─── DRAW: BACKGROUND ─────────────────────────────────────────
+// Skyline distante (silhouette) generata pigramente e rigenerata solo se
+// cambia la larghezza schermo (resize/orientamento) — riempie il grande
+// vuoto sopra i palazzi in primo piano con un po' di profondità, senza
+// interferire in alcun modo con la logica di gioco (puramente decorativa).
+let skyline=null, skylineCW=-1;
+function genSkyline(){
+  const n=Math.max(7,Math.round(CW/62));
+  const arr=[]; let x=0;
+  for(let i=0;i<n;i++){
+    const w=rnd(CW/n*.55,CW/n*1.35);
+    const h=rnd(CH*.09,CH*.24);
+    arr.push({x,w,h,lit:Math.random()>.45,seed:Math.random()});
+    x+=w;
+  }
+  return arr;
+}
 function drawBg(){
   // Deep space gradient
   const sg=ctx.createLinearGradient(0,0,0,CH);
@@ -665,6 +686,17 @@ function drawBg(){
   sg.addColorStop(.55,'#010c1c');
   sg.addColorStop(1,'#061226');
   ctx.fillStyle=sg; ctx.fillRect(0,0,CW,CH);
+
+  // Aurora: due bande di colore morbide e molto tenui, per rompere il
+  // fondo completamente piatto senza distrarre dal gioco.
+  ctx.save(); ctx.globalCompositeOperation='screen';
+  const au1=ctx.createRadialGradient(CW*.15,CH*.12,0,CW*.15,CH*.12,CW*.55);
+  au1.addColorStop(0,'rgba(0,245,200,.07)'); au1.addColorStop(1,'rgba(0,245,200,0)');
+  ctx.fillStyle=au1; ctx.fillRect(0,0,CW,CH*.6);
+  const au2=ctx.createRadialGradient(CW*.7,CH*.05,0,CW*.7,CH*.05,CW*.5);
+  au2.addColorStop(0,'rgba(255,45,111,.06)'); au2.addColorStop(1,'rgba(255,45,111,0)');
+  ctx.fillStyle=au2; ctx.fillRect(0,0,CW,CH*.55);
+  ctx.restore();
 
   // Stars
   state.stars.forEach(s=>{
@@ -699,6 +731,45 @@ function drawBg(){
     ctx.fillStyle='rgba(90,130,170,.18)';
     ctx.beginPath(); ctx.arc(mx+dx*mr,my+dy*mr,r*mr,0,TAU); ctx.fill();
   });
+  ctx.restore();
+
+  // Velivolo lontano: un puntino luminoso che attraversa lentamente il cielo,
+  // con una scia sottile — un tocco di vita nel grande vuoto sopra i palazzi.
+  const acT=(state.t*.045)%1.6;
+  if(acT<1){
+    const acx=CW*(-.08+acT*1.16), acy=CH*(.22+.05*Math.sin(acT*6.2));
+    const blink=Math.sin(state.t*7)>.55;
+    ctx.save();
+    ctx.strokeStyle='rgba(180,210,255,.25)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(acx-14,acy); ctx.lineTo(acx-2,acy); ctx.stroke();
+    if(blink){
+      ctx.fillStyle='#ffd8d8'; ctx.shadowColor='#ff6666'; ctx.shadowBlur=6;
+      ctx.beginPath(); ctx.arc(acx,acy,1.4,0,TAU); ctx.fill();
+    }
+    ctx.fillStyle='rgba(200,220,255,.7)'; ctx.shadowColor='#a0c8ff'; ctx.shadowBlur=4;
+    ctx.beginPath(); ctx.arc(acx+2,acy,1,0,TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  // Skyline distante: silhouette basse e desaturate a metà cielo, dietro ai
+  // palazzi giocabili (disegnati sopra da drawBuildings), per dare profondità
+  // invece del vuoto piatto — specie evidente in verticale su smartphone.
+  if(!skyline||skylineCW!==CW){ skyline=genSkyline(); skylineCW=CW; }
+  const skyBase=CH*.60;
+  ctx.save();
+  const haze=ctx.createLinearGradient(0,skyBase-CH*.28,0,skyBase);
+  haze.addColorStop(0,'rgba(4,14,26,0)'); haze.addColorStop(1,'rgba(4,14,26,.55)');
+  skyline.forEach(b=>{
+    const by=skyBase-b.h;
+    ctx.fillStyle='rgba(8,20,38,.62)';
+    ctx.fillRect(b.x,by,Math.ceil(b.w)+1,b.h+50);
+    if(b.lit){
+      const wx=b.x+b.w*(.28+b.seed*.4), wy=by+b.h*(.22+b.seed*.3);
+      ctx.fillStyle='rgba(140,190,230,.16)';
+      ctx.fillRect(wx,wy,Math.max(2,b.w*.1),Math.max(2,b.h*.1));
+    }
+  });
+  ctx.fillStyle=haze; ctx.fillRect(0,skyBase-CH*.28,CW,CH*.28);
   ctx.restore();
 
   // Wind HUD
@@ -785,88 +856,115 @@ function drawRoad(){
 
 // ─── DRAW: GORILLA ────────────────────────────────────────────
 function drawGorilla(g,player,celebrating,throwing,bp){
+  // Stile "neon silhouette": corpo scuro (quasi nero, tinto del colore squadra)
+  // con un bordo neon luminoso sul contorno invece del vecchio riempimento
+  // piatto a tinta unita — molto più leggibile e "a tema" del semplice blob
+  // colorato, con muso/palmi chiari per il contrasto e un emblema sul petto
+  // come accento identificativo.
   const col=player===0?C.p1:C.p2;
-  const fur=player===0?'#002018':'#380010';
-  const skin=player===0?'#00b070':'#c01848';
+  const base=player===0?'#002018':'#380010'; // corpo scuro, stesso tono usato prima come "fur"
+  const skin='#f0dcae'; // muso/palmi/piante: tono chiaro neutro, stesso per entrambi i giocatori
   const S=GW/64;
   ctx.save(); ctx.translate(g.x,g.y); ctx.scale(S,S);
+  // fill semplice, nessun bordo (dettagli interni: naso, sopracciglio, bocca...)
   const F=(fn,c,sh)=>{if(sh){ctx.shadowColor=sh;ctx.shadowBlur=12;}ctx.fillStyle=c;ctx.beginPath();fn();ctx.fill();ctx.shadowBlur=0;};
-  const K=(fn,c,w,sh)=>{if(sh){ctx.shadowColor=sh;ctx.shadowBlur=10;}ctx.strokeStyle=c;ctx.lineWidth=w;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();fn();ctx.stroke();ctx.shadowBlur=0;};
+  // fill scuro + sottile bordo neon luminoso: per le sagome principali (testa, busto, orecchie, piedi/mani)
+  const E=(fn,c)=>{
+    ctx.fillStyle=base; ctx.beginPath(); fn(); ctx.fill();
+    ctx.shadowColor=c; ctx.shadowBlur=9; ctx.strokeStyle=c; ctx.lineWidth=1.8;
+    ctx.beginPath(); fn(); ctx.stroke(); ctx.shadowBlur=0;
+  };
+  // arto (braccio/gamba): passata larga luminosa sotto + passata scura sopra,
+  // lascia un filo di neon visibile lungo tutto il bordo dell'arto
+  const L=(fn,w)=>{
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.shadowColor=col; ctx.shadowBlur=8; ctx.strokeStyle=col; ctx.lineWidth=w+3;
+    ctx.beginPath(); fn(); ctx.stroke(); ctx.shadowBlur=0;
+    ctx.strokeStyle=base; ctx.lineWidth=w;
+    ctx.beginPath(); fn(); ctx.stroke();
+  };
   // legs
-  K(()=>{ctx.moveTo(22,64);ctx.quadraticCurveTo(12,74,8,82);},col,13);
-  K(()=>{ctx.moveTo(42,64);ctx.quadraticCurveTo(52,74,56,82);},col,13);
-  F(()=>{ctx.ellipse(8,82,11,5,-.2,0,TAU);},col);
-  F(()=>{ctx.ellipse(56,82,11,5,.2,0,TAU);},col);
-  [-3,0,3].forEach(d=>{F(()=>{ctx.arc(5+d,80,1.8,0,TAU);},fur);F(()=>{ctx.arc(53+d,80,1.8,0,TAU);},fur);});
-  // torso
-  F(()=>{ctx.moveTo(8,72);ctx.bezierCurveTo(2,50,2,28,12,18);ctx.bezierCurveTo(20,10,44,10,52,18);ctx.bezierCurveTo(62,28,62,50,56,72);ctx.closePath();},col,col);
-  // torso volume
-  ctx.save();ctx.beginPath();ctx.moveTo(8,72);ctx.bezierCurveTo(2,50,2,28,12,18);ctx.bezierCurveTo(20,10,44,10,52,18);ctx.bezierCurveTo(62,28,62,50,56,72);ctx.clip();
-  const tvg=ctx.createLinearGradient(2,0,62,0);
-  tvg.addColorStop(0,'rgba(0,0,0,.4)');tvg.addColorStop(.4,'rgba(255,255,255,.1)');tvg.addColorStop(1,'rgba(0,0,0,.3)');
+  L(()=>{ctx.moveTo(21,63);ctx.quadraticCurveTo(11,74,7,83);},14);
+  L(()=>{ctx.moveTo(43,63);ctx.quadraticCurveTo(53,74,57,83);},14);
+  E(()=>{ctx.ellipse(7,83,11,5,-.2,0,TAU);},col);
+  E(()=>{ctx.ellipse(57,83,11,5,.2,0,TAU);},col);
+  [-3,0,3].forEach(d=>{F(()=>{ctx.arc(4+d,81,1.6,0,TAU);},base);F(()=>{ctx.arc(54+d,81,1.6,0,TAU);},base);});
+  // torso — spalle più larghe e petto più pieno del vecchio "blob" stretto
+  const torso=()=>{ctx.moveTo(6,73);ctx.bezierCurveTo(-2,50,-1,26,9,16);ctx.bezierCurveTo(18,7,46,7,55,16);ctx.bezierCurveTo(65,26,66,50,58,73);ctx.closePath();};
+  E(torso,col);
+  // torso volume: leggero effetto di luce che avvolge il busto scuro
+  ctx.save(); ctx.beginPath(); torso(); ctx.clip();
+  const tvg=ctx.createLinearGradient(0,0,64,0);
+  tvg.addColorStop(0,'rgba(0,0,0,.35)');tvg.addColorStop(.42,'rgba(255,255,255,.16)');tvg.addColorStop(1,'rgba(0,0,0,.4)');
   ctx.fillStyle=tvg;ctx.fillRect(0,0,64,88);ctx.restore();
-  F(()=>{ctx.ellipse(22,40,12,9,-.1,0,TAU);},skin);
-  F(()=>{ctx.ellipse(42,40,12,9,.1,0,TAU);},skin);
-  F(()=>{ctx.ellipse(32,58,11,9,0,0,TAU);},fur);
-  K(()=>{ctx.moveTo(8,72);ctx.bezierCurveTo(2,50,2,28,12,18);ctx.bezierCurveTo(20,10,44,10,52,18);ctx.bezierCurveTo(62,28,62,50,56,72);},col+'66',1,col);
+  // pettorali: patch chiare, danno volume e contrasto sul busto scuro
+  F(()=>{ctx.ellipse(23,38,11,8,-.1,0,TAU);},skin+'30');
+  F(()=>{ctx.ellipse(43,38,11,8,.1,0,TAU);},skin+'30');
+  // emblema sul petto: accento neon pieno, "cuore" luminoso della sagoma scura
+  F(()=>{ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45);ctx.bezierCurveTo(19,52,26,58,32,63);ctx.bezierCurveTo(38,58,45,52,45,45);ctx.bezierCurveTo(45,38,40,32,32,32);ctx.closePath();},col,col);
+  ctx.save(); ctx.globalAlpha=.55; ctx.strokeStyle='#fff'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45); ctx.stroke(); ctx.restore();
   // arms
   if(throwing){
-    K(()=>{ctx.moveTo(12,26);ctx.bezierCurveTo(-2,14,-8,4,-12,-2);},col,13,col);
-    K(()=>{ctx.moveTo(52,26);ctx.bezierCurveTo(64,38,70,52,72,60);},col,13);
-    F(()=>{ctx.arc(-12,-2,8,0,TAU);},col,col);F(()=>{ctx.arc(-12,-2,5,0,TAU);},skin);
+    L(()=>{ctx.moveTo(11,25);ctx.bezierCurveTo(-4,13,-10,3,-14,-4);},14);
+    L(()=>{ctx.moveTo(53,25);ctx.bezierCurveTo(66,38,72,53,74,61);},14);
+    E(()=>{ctx.arc(-14,-4,8,0,TAU);},col);F(()=>{ctx.arc(-14,-4,5,0,TAU);},skin);
   } else if(celebrating){
     const sp=1-bp;
-    const lx=12-sp*20,ly=26+sp*6,lfx=lx-sp*18,lfy=ly-sp*12;
-    const rx=52+sp*20,ry=26+sp*6,rfx=rx+sp*16,rfy=ry-sp*10;
-    K(()=>{ctx.moveTo(12,26);ctx.quadraticCurveTo(lx,ly,lfx,lfy);},col,13,col);
-    K(()=>{ctx.moveTo(52,26);ctx.quadraticCurveTo(rx,ry,rfx,rfy);},col,13,col);
-    F(()=>{ctx.arc(lfx,lfy,8,0,TAU);},col,col);F(()=>{ctx.arc(rfx,rfy,8,0,TAU);},col,col);
+    const lx=11-sp*20,ly=25+sp*6,lfx=lx-sp*18,lfy=ly-sp*12;
+    const rx=53+sp*20,ry=25+sp*6,rfx=rx+sp*16,rfy=ry-sp*10;
+    L(()=>{ctx.moveTo(11,25);ctx.quadraticCurveTo(lx,ly,lfx,lfy);},14);
+    L(()=>{ctx.moveTo(53,25);ctx.quadraticCurveTo(rx,ry,rfx,rfy);},14);
+    E(()=>{ctx.arc(lfx,lfy,8,0,TAU);},col);E(()=>{ctx.arc(rfx,rfy,8,0,TAU);},col);
     F(()=>{ctx.arc(lfx,lfy,5,0,TAU);},skin);F(()=>{ctx.arc(rfx,rfy,5,0,TAU);},skin);
   } else {
-    K(()=>{ctx.moveTo(12,26);ctx.bezierCurveTo(2,42,0,58,2,68);},col,13);
-    K(()=>{ctx.moveTo(52,26);ctx.bezierCurveTo(62,42,64,58,62,68);},col,13);
-    F(()=>{ctx.arc(2,68,8,0,TAU);},col);F(()=>{ctx.arc(62,68,8,0,TAU);},col);
-    F(()=>{ctx.arc(2,68,5,0,TAU);},skin);F(()=>{ctx.arc(62,68,5,0,TAU);},skin);
-    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(-1+d,66,2,0,TAU);},fur);F(()=>{ctx.arc(59+d,66,2,0,TAU);},fur);});
+    L(()=>{ctx.moveTo(11,25);ctx.bezierCurveTo(0,42,-3,58,0,69);},14);
+    L(()=>{ctx.moveTo(53,25);ctx.bezierCurveTo(64,42,67,58,64,69);},14);
+    E(()=>{ctx.arc(0,69,8,0,TAU);},col);E(()=>{ctx.arc(64,69,8,0,TAU);},col);
+    F(()=>{ctx.arc(0,69,5,0,TAU);},skin);F(()=>{ctx.arc(64,69,5,0,TAU);},skin);
+    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(-3+d,67,2,0,TAU);},base);F(()=>{ctx.arc(61+d,67,2,0,TAU);},base);});
   }
   // neck
-  F(()=>{ctx.moveTo(22,18);ctx.lineTo(42,18);ctx.lineTo(40,10);ctx.lineTo(24,10);ctx.closePath();},col);
+  F(()=>{ctx.moveTo(22,18);ctx.lineTo(42,18);ctx.lineTo(40,10);ctx.lineTo(24,10);ctx.closePath();},base);
   // head
-  F(()=>{ctx.ellipse(32,10,18,14,0,0,TAU);},col,col);
+  E(()=>{ctx.ellipse(32,10,19,15,0,0,TAU);},col);
   // head volume
-  ctx.save();ctx.beginPath();ctx.ellipse(32,10,18,14,0,0,TAU);ctx.clip();
-  const hvg=ctx.createRadialGradient(24,3,1,32,10,20);
-  hvg.addColorStop(0,'rgba(255,255,255,.14)');hvg.addColorStop(1,'rgba(0,0,0,.28)');
-  ctx.fillStyle=hvg;ctx.fillRect(14,-4,36,28);ctx.restore();
-  // crest
-  F(()=>{ctx.moveTo(22,2);ctx.bezierCurveTo(24,-5,40,-5,42,2);ctx.bezierCurveTo(44,7,40,9,32,9);ctx.bezierCurveTo(24,9,20,7,22,2);ctx.closePath();},col);
-  K(()=>{ctx.moveTo(26,0);ctx.bezierCurveTo(30,-4,36,-3,38,2);},skin,1.5);
-  // brow
-  F(()=>{ctx.moveTo(13,10);ctx.bezierCurveTo(18,4,46,4,51,10);ctx.lineTo(51,16);ctx.lineTo(13,16);ctx.closePath();},fur);
-  // ears
-  F(()=>{ctx.arc(14,10,7,0,TAU);},col);F(()=>{ctx.arc(50,10,7,0,TAU);},col);
-  F(()=>{ctx.arc(14,10,3.5,0,TAU);},fur);F(()=>{ctx.arc(50,10,3.5,0,TAU);},fur);
+  ctx.save();ctx.beginPath();ctx.ellipse(32,10,19,15,0,0,TAU);ctx.clip();
+  const hvg=ctx.createRadialGradient(24,3,1,32,10,21);
+  hvg.addColorStop(0,'rgba(255,255,255,.18)');hvg.addColorStop(1,'rgba(0,0,0,.3)');
+  ctx.fillStyle=hvg;ctx.fillRect(13,-5,38,30);ctx.restore();
+  // crest — accento neon pieno in cima alla testa
+  F(()=>{ctx.moveTo(22,1);ctx.bezierCurveTo(24,-6,40,-6,42,1);ctx.bezierCurveTo(44,6,40,8,32,8);ctx.bezierCurveTo(24,8,20,6,22,1);ctx.closePath();},col,col);
+  // brow — cresta sopraccigliare scura e pronunciata
+  F(()=>{ctx.moveTo(12,11);ctx.bezierCurveTo(17,3,47,3,52,11);ctx.lineTo(52,17);ctx.lineTo(12,17);ctx.closePath();},base);
+  ctx.save();ctx.globalAlpha=.7;ctx.strokeStyle=col;ctx.lineWidth=1.2;ctx.shadowColor=col;ctx.shadowBlur=4;
+  ctx.beginPath();ctx.moveTo(14,10);ctx.bezierCurveTo(20,4,44,4,50,10);ctx.stroke();ctx.shadowBlur=0;ctx.restore();
+  // ears — esterno scuro con bordo neon, interno luminoso pieno
+  E(()=>{ctx.arc(13,10,7.5,0,TAU);},col);E(()=>{ctx.arc(51,10,7.5,0,TAU);},col);
+  F(()=>{ctx.arc(13,10,3.4,0,TAU);},col,col);F(()=>{ctx.arc(51,10,3.4,0,TAU);},col,col);
   // muzzle
-  F(()=>{ctx.ellipse(32,20,13,10,0,0,TAU);},fur);
-  F(()=>{ctx.ellipse(32,24,9,7,0,0,TAU);},skin);
+  E(()=>{ctx.ellipse(32,21,14,11,0,0,TAU);},col);
+  F(()=>{ctx.ellipse(32,25,9.5,7.5,0,0,TAU);},skin);
   // nose
-  F(()=>{ctx.ellipse(25,18,4,3,-.3,0,TAU);},col);F(()=>{ctx.ellipse(39,18,4,3,.3,0,TAU);},col);
-  F(()=>{ctx.ellipse(25,19,2.2,1.6,-.3,0,TAU);},'#111');F(()=>{ctx.ellipse(39,19,2.2,1.6,.3,0,TAU);},'#111');
-  // eyes
-  F(()=>{ctx.arc(21,12,6,0,TAU);},fur);F(()=>{ctx.arc(43,12,6,0,TAU);},fur);
-  F(()=>{ctx.arc(21,12,3.8,0,TAU);},'#ddd4b8');F(()=>{ctx.arc(43,12,3.8,0,TAU);},'#ddd4b8');
-  F(()=>{ctx.arc(21,12,2.4,0,TAU);},'#180e00');F(()=>{ctx.arc(43,12,2.4,0,TAU);},'#180e00');
-  F(()=>{ctx.arc(21,12,1.1,0,TAU);},'#000');F(()=>{ctx.arc(43,12,1.1,0,TAU);},'#000');
-  F(()=>{ctx.arc(22,11,.9,0,TAU);},col,col);F(()=>{ctx.arc(44,11,.9,0,TAU);},col,col);
+  F(()=>{ctx.ellipse(25,19,4,3,-.3,0,TAU);},col,col);F(()=>{ctx.ellipse(39,19,4,3,.3,0,TAU);},col,col);
+  F(()=>{ctx.ellipse(25,20,2.2,1.6,-.3,0,TAU);},'#111');F(()=>{ctx.ellipse(39,20,2.2,1.6,.3,0,TAU);},'#111');
+  // eyes — più grandi per restare leggibili anche piccoli
+  F(()=>{ctx.arc(21,12,6.6,0,TAU);},base);F(()=>{ctx.arc(43,12,6.6,0,TAU);},base);
+  F(()=>{ctx.arc(21,12,4.3,0,TAU);},'#f0e8d0');F(()=>{ctx.arc(43,12,4.3,0,TAU);},'#f0e8d0');
+  F(()=>{ctx.arc(21,12,2.6,0,TAU);},'#180e00');F(()=>{ctx.arc(43,12,2.6,0,TAU);},'#180e00');
+  F(()=>{ctx.arc(21,12,1.2,0,TAU);},'#000');F(()=>{ctx.arc(43,12,1.2,0,TAU);},'#000');
+  F(()=>{ctx.arc(22.3,10.8,1,0,TAU);},col,col);F(()=>{ctx.arc(44.3,10.8,1,0,TAU);},col,col);
   // mouth
   if(celebrating){
-    F(()=>{ctx.ellipse(32,27,8,6,0,0,TAU);},'#600000');
-    [26,30,34].forEach(tx=>F(()=>{ctx.rect(tx,22,3.5,4.5);},'#fff'));
-    [27,31,35].forEach(tx=>F(()=>{ctx.rect(tx,27,3,3.5);},'#ffe0c0'));
-    F(()=>{ctx.ellipse(32,31,4,3.5,0,0,TAU);},'#bb2233');
+    F(()=>{ctx.ellipse(32,28,8,6,0,0,TAU);},'#600000');
+    [26,30,34].forEach(tx=>F(()=>{ctx.rect(tx,23,3.5,4.5);},'#fff'));
+    [27,31,35].forEach(tx=>F(()=>{ctx.rect(tx,28,3,3.5);},'#ffe0c0'));
+    F(()=>{ctx.ellipse(32,32,4,3.5,0,0,TAU);},'#bb2233');
   } else {
-    K(()=>{ctx.moveTo(24,27);ctx.bezierCurveTo(28,24,36,24,40,27);},fur,2);
-    K(()=>{ctx.moveTo(24,28);ctx.bezierCurveTo(28,32,36,32,40,28);},fur,1.5);
+    ctx.strokeStyle=base;ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.beginPath();ctx.moveTo(24,28);ctx.bezierCurveTo(28,25,36,25,40,28);ctx.stroke();
+    ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(24,29);ctx.bezierCurveTo(28,33,36,33,40,29);ctx.stroke();
   }
   ctx.restore();
 }
@@ -874,7 +972,19 @@ function drawGorilla(g,player,celebrating,throwing,bp){
 // ─── DRAW: BANANA ─────────────────────────────────────────────
 function drawBanana(){
   if(!state.banana) return;
-  const{pos,spin}=state.banana;
+  const{pos,spin,trail}=state.banana;
+  // Scia luminosa: punti sempre più piccoli/trasparenti verso il passato,
+  // dà un senso di velocità al lancio invece della sola banana statica.
+  if(trail&&trail.length){
+    trail.forEach((tp,i)=>{
+      const a=(i+1)/(trail.length+1);
+      ctx.save();
+      ctx.globalAlpha=a*.3;
+      ctx.fillStyle='#ffd000'; ctx.shadowColor='#ffd000'; ctx.shadowBlur=8*a;
+      ctx.beginPath(); ctx.arc(tp.x,tp.y,2.5*a+1.2,0,TAU); ctx.fill();
+      ctx.restore();
+    });
+  }
   ctx.save(); ctx.translate(pos.x,pos.y); ctx.rotate(spin);
   // Banana = thick curved crescent arc
   const R=11,r=6,sweep=Math.PI*.72;
@@ -906,6 +1016,13 @@ function drawBanana(){
 function drawExplosion(){
   if(!state.explosion) return;
   const ex=state.explosion,p=Math.min((state.t-ex.t0)/ex.dur,1),ep=1-p;
+  // Flash iniziale: un breve lampo pieno schermo nei primissimi istanti,
+  // per dare più "peso" all'impatto invece del solo bagliore locale.
+  if(p<.1){
+    const fa=(1-p/.1)*.16;
+    ctx.save(); ctx.globalAlpha=fa; ctx.fillStyle='#fff5cc';
+    ctx.fillRect(0,0,CW,CH); ctx.restore();
+  }
   ctx.save();
   [1,.55,.28].forEach((sc,i)=>{
     const rp=Math.max(0,p-i*.1);if(rp<=0)return;
@@ -1038,23 +1155,36 @@ function loop(){
   }
   // physics
   if(state.phase==='flying'&&state.banana){
-    for(let i=0;i<3;i++){
+    outer: for(let i=0;i<3;i++){
+      const prevPos={x:state.banana.pos.x,y:state.banana.pos.y};
       state.banana=stepBanana(state.banana,state.wind);
       const pos=state.banana.pos;
-      if(pos.x<-50||pos.x>CW+50||pos.y>CH+80){nextTurn();break;} // fuori schermo lateralmente: nessun impatto
-      if(pos.y>=CH-ROAD_H){triggerExplosion(pos.x,CH-ROAD_H,-1);break;} // impatto a terra: ora visibile invece di sparire senza feedback
-      const gh=hitGorilla(pos,state.gorillas,state.turn,state.banana);
-      if(gh!==-1){triggerExplosion(pos.x,pos.y,gh);break;}
-      const bh=hitBuilding(pos,state.buildings);
-      if(bh!==-1){
-        blastBuilding(state.buildings[bh],pos.x,pos.y,EXPL_R);
-        // Danno collaterale: come nell'originale, far crollare un palazzo troppo
-        // vicino a un gorilla (anche il proprio) può ucciderlo anche senza un
-        // colpo diretto. Controlla entrambi i gorilla, shooter incluso.
-        let splashKilled=-1;
-        for(const i of [0,1]){ if(inGorillaHitbox(pos.x,pos.y,state.gorillas[i])){ splashKilled=i; break; } }
-        triggerExplosion(pos.x,pos.y,splashKilled);
-        break;
+      // FIX tunneling: ad alta velocità (vento forte + volo lungo, la banana
+      // può percorrere più della larghezza di un edificio o del gorilla in un
+      // solo sotto-passo, "saltandoci sopra" senza mai testare un punto al suo
+      // interno. Invece di controllare solo il punto di arrivo, si campiona il
+      // segmento percorso in questo sotto-passo ogni ~6px e si testa ogni punto
+      // nell'ordine in cui verrebbe realmente attraversato.
+      const segDist=Math.hypot(pos.x-prevPos.x,pos.y-prevPos.y);
+      const steps=Math.max(1,Math.ceil(segDist/6));
+      for(let s=1;s<=steps;s++){
+        const t=s/steps;
+        const sp={x:prevPos.x+(pos.x-prevPos.x)*t,y:prevPos.y+(pos.y-prevPos.y)*t};
+        if(sp.x<-50||sp.x>CW+50||sp.y>CH+80){nextTurn();break outer;} // fuori schermo lateralmente: nessun impatto
+        if(sp.y>=CH-ROAD_H){triggerExplosion(sp.x,CH-ROAD_H,-1);break outer;} // impatto a terra: ora visibile invece di sparire senza feedback
+        const gh=hitGorilla(sp,state.gorillas,state.turn,state.banana);
+        if(gh!==-1){triggerExplosion(sp.x,sp.y,gh);break outer;}
+        const bh=hitBuilding(sp,state.buildings);
+        if(bh!==-1){
+          blastBuilding(state.buildings[bh],sp.x,sp.y,EXPL_R);
+          // Danno collaterale: come nell'originale, far crollare un palazzo troppo
+          // vicino a un gorilla (anche il proprio) può ucciderlo anche senza un
+          // colpo diretto. Controlla entrambi i gorilla, shooter incluso.
+          let splashKilled=-1;
+          for(const idx of [0,1]){ if(inGorillaHitbox(sp.x,sp.y,state.gorillas[idx])){ splashKilled=idx; break; } }
+          triggerExplosion(sp.x,sp.y,splashKilled);
+          break outer;
+        }
       }
     }
   }
