@@ -1,4 +1,4 @@
-1.2.0
+1.3.0
 
 Changelog
 =========
@@ -7,6 +7,57 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.3.0 — 2026-09-24
+--------------------
+Giro di redesign grafico: via il vecchio gorilla "a blob" a tinta piatta, cielo meno vuoto,
+un po' più di dinamismo negli effetti. Nessun cambiamento di gameplay/fisica/collisioni.
+
+Aggiunto/modificato:
+- Gorilla ridisegnati in stile "silhouette neon": corpo scuro (quasi nero, tinto del colore
+  di squadra) con un bordo neon luminoso sul contorno, invece del vecchio riempimento a
+  tinta piena che li faceva leggere come un blob monocromatico. Aggiunto un emblema
+  luminoso sul petto come accento identificativo, muso/palmi in un tono chiaro neutro per
+  contrasto, occhi e cresta sopraccigliare ingranditi per restare leggibili anche piccoli,
+  spalle e braccia leggermente più piene. Stesse identiche pose (mira, lancio, esultanza).
+- Cielo meno vuoto: aggiunta una skyline distante (silhouette basse e sfumate a metà
+  cielo, dietro ai palazzi giocabili), due bande di colore molto tenui in stile aurora, e
+  un piccolo aereo lontano con luce lampeggiante che attraversa lentamente lo schermo.
+  Più evidente in verticale su smartphone, dove sopra i palazzi c'era molto spazio vuoto.
+- Scia luminosa dietro la banana in volo, per dare più senso di velocità al lancio.
+- Un breve lampo pieno schermo nei primissimi istanti di ogni esplosione, per dare più
+  "peso" all'impatto oltre al bagliore locale già presente.
+
+Verificato: `node --check` per la sintassi; rieseguiti i test automatici delle correzioni
+precedenti (hitbox ellittica, danno collaterale, fix tunneling, audio) — tutti ancora validi,
+dato che questo giro non tocca fisica/collisioni/audio, solo il rendering. Controllate
+visivamente tutte le pose del gorilla (mira, lancio, esultanza) su entrambi i colori
+squadra, in landscape e portrait, tramite screenshot automatizzati.
+
+v1.2.1 — 2026-09-20
+--------------------
+Pulizia tecnica: chiusa una debolezza residua nella rilevazione delle collisioni,
+aggiunti i file di corredo standard di un repository pubblico.
+
+Corretto:
+- Possibile "tunneling" ad alta velocità: la fisica testava solo il punto di arrivo di
+  ogni sotto-passo, quindi con una velocità sufficientemente alta (vento forte su un volo
+  molto lungo) la banana avrebbe potuto "saltare" oltre un gorilla o un edificio sottile
+  senza mai attraversare un punto testato, mancando la collisione. Ora si campiona l'intero
+  segmento percorso in ogni sotto-passo (ogni ~6px) invece del solo punto finale, testando
+  ogni punto nell'ordine reale di attraversamento. Verificato forzando velocità estreme
+  (5000-6000 px/s, molto oltre il massimo raggiungibile in gioco) contro un gorilla e contro
+  un edificio: prima l'impatto sarebbe stato mancato, ora viene sempre registrato. Nessun
+  cambiamento percepibile a velocità normali di gioco.
+
+Aggiunto:
+- `README.md` con descrizione del progetto, come giocare e note tecniche.
+- `.gitignore` di base.
+
+Rimosso:
+- `gorilla2026.jsx`, prototipo React precedente mai collegato al gioco vero (`index.html`
+  è l'unico file eseguito). Rimuovilo manualmente dal repository: non essendoci una nuova
+  versione da sostituire, questo file va solo cancellato (vedi istruzioni a parte).
 
 v1.2.0 — 2026-09-20
 --------------------
