@@ -133,7 +133,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.10.0';
+const VERSION='1.10.1';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -805,11 +805,10 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   F(()=>{ctx.ellipse(20,28,14,22,-.15,0,TAU);},'rgba(255,255,255,.18)');
   ctx.restore();
   // pettorali: macchie piatte più scure, un po' di struttura sul busto
+  // (rimosso l'emblema a goccia di v1.3.0: su un corpo peloso leggeva come
+  // una "macchia"/tag da mucca più che un dettaglio da gorilla)
   F(()=>{ctx.ellipse(23,38,11,8,-.1,0,TAU);},dk+'55');
   F(()=>{ctx.ellipse(43,38,11,8,.1,0,TAU);},dk+'55');
-  // emblema sul petto: distintivo piatto scuro con contorno nero + riflesso
-  E(()=>{ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45);ctx.bezierCurveTo(19,52,26,58,32,63);ctx.bezierCurveTo(38,58,45,52,45,45);ctx.bezierCurveTo(45,38,40,32,32,32);ctx.closePath();},dk,2.4);
-  F(()=>{ctx.moveTo(32,34);ctx.bezierCurveTo(27,34,23,39,23,45);ctx.lineTo(27,45);ctx.bezierCurveTo(27,41,29,38,32,37);ctx.closePath();},'rgba(255,255,255,.35)');
   // arms — mani ingrandite (prima raggio 8/5) per restare in scala coi piedi
   if(throwing){
     L(()=>{ctx.moveTo(11,25);ctx.bezierCurveTo(-4,13,-10,3,-14,-4);},14);
@@ -824,11 +823,20 @@ function drawGorilla(g,player,celebrating,throwing,bp){
     E(()=>{ctx.arc(lfx,lfy,9.5,0,TAU);},col);E(()=>{ctx.arc(rfx,rfy,9.5,0,TAU);},col);
     F(()=>{ctx.arc(lfx,lfy,6.2,0,TAU);},skin);F(()=>{ctx.arc(rfx,rfy,6.2,0,TAU);},skin);
   } else {
-    L(()=>{ctx.moveTo(11,25);ctx.bezierCurveTo(0,42,-3,58,0,69);},14);
-    L(()=>{ctx.moveTo(53,25);ctx.bezierCurveTo(64,42,67,58,64,69);},14);
-    E(()=>{ctx.arc(0,69,9.5,0,TAU);},col);E(()=>{ctx.arc(64,69,9.5,0,TAU);},col);
-    F(()=>{ctx.arc(0,69,6.2,0,TAU);},skin);F(()=>{ctx.arc(64,69,6.2,0,TAU);},skin);
-    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(-3+d,67,2.3,0,TAU);},dk);F(()=>{ctx.arc(61+d,67,2.3,0,TAU);},dk);});
+    // Mira/riposo: prima le braccia disegnavano un'unica curva morbida che
+    // si allargava ben oltre i fianchi — proprio il profilo che, con un
+    // contorno nero spesso, leggeva come un'ala di pipistrello spiegata.
+    // Ora ogni braccio è spezzato in due tratti con un gomito ben visibile
+    // (avambraccio più spesso del braccio, come un vero gorilla — fonte in
+    // VERSION) e la mano torna vicino al fianco/ginocchio invece di
+    // allargarsi, come un gorilla seduto coi gomiti sulle ginocchia.
+    L(()=>{ctx.moveTo(11,25);ctx.lineTo(4,46);},11);
+    L(()=>{ctx.moveTo(4,46);ctx.quadraticCurveTo(2,62,8,76);},15);
+    L(()=>{ctx.moveTo(53,25);ctx.lineTo(60,46);},11);
+    L(()=>{ctx.moveTo(60,46);ctx.quadraticCurveTo(62,62,56,76);},15);
+    E(()=>{ctx.arc(8,76,9.5,0,TAU);},col);E(()=>{ctx.arc(56,76,9.5,0,TAU);},col);
+    F(()=>{ctx.arc(8,76,6.2,0,TAU);},skin);F(()=>{ctx.arc(56,76,6.2,0,TAU);},skin);
+    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(5+d,74,2.3,0,TAU);},dk);F(()=>{ctx.arc(53+d,74,2.3,0,TAU);},dk);});
   }
   // neck
   F(()=>{ctx.moveTo(22,18);ctx.lineTo(42,18);ctx.lineTo(40,10);ctx.lineTo(24,10);ctx.closePath();},dk);
@@ -836,7 +844,18 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   // viene disegnato dentro una trasformazione locale che lo ingrandisce
   // attorno al proprio centro (HX,HY) — proporzioni "da fumetto" con testa
   // volutamente più grande del corpo, nessuna coordinata interna toccata.
-  const HX=32,HY=10,HS=1.32;
+  // v1.10.1: segnalato dall'utente come "sembra un pipistrello" (prima
+  // "una mucca") — due difetti precisi individuati dopo una ricerca su
+  // come si disegna un gorilla cartoon: 1) le orecchie erano grandi, rotonde
+  // e piazzate in alto all'altezza degli occhi, cioè esattamente dove si
+  // disegnano le orecchie di un pipistrello — le fonti dicono che le
+  // orecchie di un gorilla vanno invece piccole e basse, non più in alto
+  // del muso; 2) la "sopracciglia" copriva tutta la larghezza della testa
+  // fino a sotto il livello degli occhi, creando una maschera scura con due
+  // macchie bianche sopra — lo schema cromatico classico di pipistrelli e
+  // procioni nei cartoon. Testa anche leggermente meno ingrandita (1.32→1.16)
+  // per non esagerare l'effetto "testa enorme" che amplificava il problema.
+  const HX=32,HY=10,HS=1.16;
   ctx.save(); ctx.translate(HX,HY); ctx.scale(HS,HS); ctx.translate(-HX,-HY);
   // head
   E(()=>{ctx.ellipse(32,10,19,15,0,0,TAU);},col);
@@ -846,14 +865,16 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   ctx.restore();
   // crest — ciuffo piatto più scuro in cima alla testa, con contorno
   E(()=>{ctx.moveTo(22,1);ctx.bezierCurveTo(24,-6,40,-6,42,1);ctx.bezierCurveTo(44,6,40,8,32,8);ctx.bezierCurveTo(24,8,20,6,22,1);ctx.closePath();},dk,2.4);
-  // brow — sopracciglia più aguzze e "corrucciate", espressione più marcata
-  // da fumetto d'azione (prima un arco morbido, ora un picco più deciso)
-  F(()=>{ctx.moveTo(12,11);ctx.bezierCurveTo(15,-1,49,-1,52,11);ctx.lineTo(52,17);ctx.lineTo(12,17);ctx.closePath();},dk);
-  // ears — esterno piatto nel colore squadra, interno piatto più scuro
-  E(()=>{ctx.arc(13,10,7.5,0,TAU);},col);E(()=>{ctx.arc(51,10,7.5,0,TAU);},col);
-  F(()=>{ctx.arc(13,10,3.4,0,TAU);},dk);F(()=>{ctx.arc(51,10,3.4,0,TAU);},dk);
+  // brow — ora una cresta sopraccigliare concentrata SOPRA gli occhi (si
+  // ferma al bordo superiore degli occhi, non li copre più), non più una
+  // fascia scura larga quanto tutta la testa fino sotto gli occhi
+  F(()=>{ctx.moveTo(13,9);ctx.bezierCurveTo(16,0,48,0,51,9);ctx.bezierCurveTo(47,6,38,5,32,5);ctx.bezierCurveTo(26,5,17,6,13,9);ctx.closePath();},dk);
+  // ears — piccole e basse, a livello del muso (non più in alto quanto gli
+  // occhi): orecchie da gorilla vere, non più da pipistrello/mucca
+  E(()=>{ctx.arc(15,22,5.5,0,TAU);},col);E(()=>{ctx.arc(49,22,5.5,0,TAU);},col);
+  F(()=>{ctx.arc(15,22,2.6,0,TAU);},dk);F(()=>{ctx.arc(49,22,2.6,0,TAU);},dk);
   // muzzle — un unico muso crema con contorno nero, più semplice e più "cartoon"
-  E(()=>{ctx.ellipse(32,22,13,10,0,0,TAU);},skin);
+  E(()=>{ctx.ellipse(32,23,13.5,9.5,0,0,TAU);},skin);
   // nose
   F(()=>{ctx.ellipse(25,19,4,3,-.3,0,TAU);},dk);F(()=>{ctx.ellipse(39,19,4,3,.3,0,TAU);},dk);
   F(()=>{ctx.ellipse(25,20,2.2,1.6,-.3,0,TAU);},'#111');F(()=>{ctx.ellipse(39,20,2.2,1.6,.3,0,TAU);},'#111');
