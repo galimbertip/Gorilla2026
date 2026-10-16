@@ -1,4 +1,4 @@
-1.9.0
+1.10.0
 
 Changelog
 =========
@@ -7,6 +7,59 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.10.0 — 2026-10-16
+---------------------
+Due segnalazioni dirette dell'utente nella stessa sessione: lo stile cartoon "lascia ancora
+a desiderare" (va reso più fumettoso "spinto") e un bug sui crateri ("ho colpito più volte
+un palazzo col gorilla 1, poi col gorilla 2 ho colpito la stessa area, ma il gioco ha fatto
+un cratere nuovo, come se quelli dell'altro non esistessero"). Chiesta priorità sullo stile
+tramite domanda a scelta multipla: scelte "contorni/forme più esagerati", "effetti
+onomatopeici a schermo" e "linee cinetiche/impatto" (scartate per ora texture a
+retino/halftone).
+
+Corretto (bug):
+- **Fusione crateri troppo rigida.** `blastBuilding()` fondeva un nuovo impatto con un
+  cratere esistente solo se la distanza era sotto `cr.r*1.4` — una soglia che NON teneva
+  conto del raggio del nuovo colpo (`r`), e che con `EXPL_R≈36px` (landscape) partiva da
+  appena ~50px. Due colpi sulla stessa parete di un edificio ma non esattamente nello
+  stesso punto (es. da due gorilla diversi, con traiettorie diverse) restavano facilmente
+  sopra quella distanza e creavano un secondo cratere separato invece di allargare quello
+  già presente. Ora la soglia è `(cr.r+r)*1.25`: i due impatti si fondono se i rispettivi
+  cerchi d'esplosione si toccherebbero visivamente (con un margine), indipendentemente da
+  chi ha sparato. Verificato con un test automatico (Node + jsdom): due colpi a 85px di
+  distanza (prima: 2 crateri separati) ora si fondono in 1 solo cratere più grande; due
+  colpi a 400px di distanza restano correttamente separati (nessuna fusione eccessiva).
+
+Modificato (stile "fumettoso spinto"):
+- **Gorilla ridisegnati più esagerati.** Testa ingrandita (~32%) rispetto al corpo
+  disegnandola dentro una trasformazione locale centrata sulla testa stessa (nessuna
+  coordinata dei singoli dettagli toccata, solo la scala attorno al perno) — proporzioni
+  da "super deformed", tipiche del fumetto spinto. Mani e piedi più grandi, sopracciglia
+  più aguzze e "corrucciate" per un'espressione più marcata, occhi ancora più grandi,
+  contorni neri più spessi ovunque (testa/busto/arti). Stesse identiche pose di mira,
+  lancio ed esultanza; stesse coordinate della sagoma usate dalla fisica (bounding box
+  `GW`/`GH` e hitbox ellittica invariate) — cambia solo come viene disegnato il gorilla.
+- **Onomatopee a schermo.** Ad ogni esplosione compare una scritta fumettistica in font
+  "Bangers" (aggiunto da Google Fonts), con un piccolo rimbalzo di scala all'apparizione e
+  una dissolvenza verso l'alto alla scomparsa: "POW!"/"BAM!"/"WHAP!"/"SMACK!" (scelta a
+  caso) per un colpo diretto su un gorilla, "BOOM!"/"KABOOM!"/"CRASH!"/"BLAM!" per un
+  impatto su edificio o strada.
+- **Linee cinetiche.** Un ventaglio di tratti neri dietro la banana in volo (oltre alla
+  scia già presente, quando la velocità supera una soglia minima) per un effetto "a tutta
+  velocità"; raggi dritti che scattano fuori dal centro dell'esplosione nei primissimi
+  istanti e svaniscono subito, il classico "impatto" da fumetto d'azione — generati una
+  sola volta per esplosione (non ad ogni fotogramma) così restano stabili invece di
+  tremolare.
+- Nessun cambiamento alla fisica/hitbox in nessuno dei due punti: solo disegno.
+
+Verificato: `node --check` per la sintassi; rieseguiti i test di regressione precedenti
+(mira a 360° su tutte le direzioni, tiro verticale) — ancora validi; nuovo test sulla
+fusione crateri (sopra); screenshot automatizzati (browser headless) in landscape e
+portrait di tutte le pose del gorilla col nuovo stile esagerato, di un'esplosione con
+colpo diretto (parola "POW!"/"WHAP!") e di una su edificio (parola "BOOM!"), confermando
+visivamente le linee d'urto, la stella del nucleo e il testo onomatopeico leggibili in
+entrambi gli orientamenti.
 
 v1.9.0 — 2026-10-16
 --------------------
