@@ -1,4 +1,4 @@
-1.10.0
+1.10.1
 
 Changelog
 =========
@@ -7,6 +7,43 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.10.1 — 2026-10-16
+---------------------
+Segnalazione diretta e dura dell'utente subito dopo la v1.10.0: "il gorilla è sempre
+peggio: fino alla penultima versione era una mucca... ora è un pipistrello". Invece di
+ritoccare a caso i numeri come nei round precedenti, prima di mettere mano al codice è
+stata fatta una ricerca su come si disegna davvero un gorilla in stile cartoon (fonte in
+fondo), per individuare con precisione cosa nel disegno leggeva come "pipistrello"/"mucca"
+invece che "gorilla".
+
+Due cause individuate e corrette (solo nel disegno, nessuna fisica/hitbox toccata):
+
+- **Orecchie.** Erano grandi, rotonde e piazzate in alto, alla stessa altezza degli occhi,
+  sporgenti ai lati della testa — esattamente dove e come si disegnano le orecchie di un
+  pipistrello. La fonte consultata è esplicita: in un gorilla le orecchie vanno "piccole,
+  non più in alto del muso". Spostate in basso a livello del muso/guance e ridotte (raggio
+  dimezzato), come indicato.
+- **Sopracciglia troppo estese.** La "cresta sopraccigliare" copriva tutta la larghezza
+  della testa fino a sotto il livello degli occhi, creando di fatto una maschera scura con
+  due macchie bianche sopra — lo schema cromatico classico con cui si disegnano pipistrelli
+  e procioni nei cartoon, non i gorilla. Ora si ferma appena sopra gli occhi, come una vera
+  cresta sopraccigliare concentrata e non più come una maschera.
+- **Braccia a riposo "ad ala".** La posa di mira disegnava ogni braccio come un'unica
+  curva morbida che si allargava ben oltre i fianchi — con un contorno nero spesso,
+  esattamente il profilo di un'ala di pipistrello spiegata. Ogni braccio è ora spezzato in
+  due tratti con un gomito visibile (avambraccio più spesso del braccio, come indicato
+  dalla fonte per un gorilla vero) e la mano torna vicino al fianco/ginocchio invece di
+  allargarsi, per una posa più "gorilla seduto coi gomiti sulle ginocchia".
+- **Rimosso l'emblema a goccia sul petto** (introdotto in v1.3.0): su un corpo peloso
+  leggeva più come una macchia/tag da mucca che come un dettaglio anatomico da gorilla.
+- Testa ingrandita leggermente meno (scala 1.32→1.16): l'ingrandimento di per sé andava
+  bene (richiesto dall'utente), ma amplificava gli altri due difetti.
+
+Verificato: `node --check` per la sintassi; rieseguiti i test di regressione (mira a
+360°, fisica) — ancora validi, dato che il giro tocca solo `drawGorilla`; screenshot
+automatizzati (browser headless) di tutte le pose in entrambi gli orientamenti per un
+confronto diretto col problema segnalato.
 
 v1.10.0 — 2026-10-16
 ---------------------
