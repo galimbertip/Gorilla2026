@@ -133,7 +133,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.7.0';
+const VERSION='1.8.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -251,15 +251,17 @@ function vibrate(pattern){
 // ─── PALETTE ──────────────────────────────────────────────────
 const C={p1:'#00f5c8',p2:'#ff2d6f',banana:'#ffd000',expl:'#ff5500'};
 
-// 6 building types — each with 5 colour keys
-// face=front wall, side=right face, roof=top, trim=neon edge, win=window, sign=neon sign, lobby=ground
+// 6 tipi di edificio, ora a tinte piatte "cartoon" invece che a base neon.
+// face=facciata (tinta principale), side=fianco (più scuro), roof=tetto (più
+// chiaro), trim=accento scuro, win=finestra accesa (condivisa), sign=colore
+// dell'insegna sul tetto, lobby=piano terra.
 const PALS=[
-  {face:'#0d1f35',side:'#060f1a',roof:'#0a1828',trim:'#00f5c8',win:'#c8f0ff',sign:'#00f5c8',lobby:'#081420'},
-  {face:'#180a30',side:'#0c041a',roof:'#140824',trim:'#cc44ff',win:'#e8c8ff',sign:'#dd88ff',lobby:'#100620'},
-  {face:'#200a0a',side:'#100404',roof:'#180808',trim:'#ff3344',win:'#ffc8cc',sign:'#ff7788',lobby:'#140606'},
-  {face:'#0a1800',side:'#050e00',roof:'#081400',trim:'#33ff77',win:'#c8ffd8',sign:'#77ffaa',lobby:'#060f00'},
-  {face:'#1e1000',side:'#100800',roof:'#180c00',trim:'#ff9900',win:'#ffe8b0',sign:'#ffcc44',lobby:'#100800'},
-  {face:'#000e22',side:'#00080f',roof:'#000c1c',trim:'#0099ff',win:'#b0d8ff',sign:'#44aaff',lobby:'#000810'},
+  {face:'#2dd4bf',side:'#17a08f',roof:'#5eead4',trim:'#0f3d3a',win:'#fff1b8',sign:'#f97316',lobby:'#0a2b28'},
+  {face:'#c084fc',side:'#9d5ce0',roof:'#e2b8ff',trim:'#3b1664',win:'#fff1b8',sign:'#f97316',lobby:'#2a0f49'},
+  {face:'#fb7185',side:'#dd4f63',roof:'#ffb0bb',trim:'#5c0f20',win:'#fff1b8',sign:'#facc15',lobby:'#450a18'},
+  {face:'#4ade80',side:'#2fb868',roof:'#a3f3bf',trim:'#0f4023',win:'#fff1b8',sign:'#facc15',lobby:'#0a2f1a'},
+  {face:'#fbbf24',side:'#e0a00f',roof:'#ffe08a',trim:'#5c3a06',win:'#fff1b8',sign:'#38bdf8',lobby:'#452c04'},
+  {face:'#38bdf8',side:'#1f9bd9',roof:'#a0e0ff',trim:'#0c3a56',win:'#fff1b8',sign:'#facc15',lobby:'#092a40'},
 ];
 
 // ─── BUILDINGS ────────────────────────────────────────────────
@@ -284,256 +286,131 @@ function shade(hex,f){
 }
 
 function renderBuilding(b){
+  // Stile "cartoon": via gradienti, ambient occlusion e bagliori neon —
+  // ogni faccia dell'edificio è una tinta piatta (facciata/fianco/tetto,
+  // già pensati come tre toni distinti nella nuova PALS), con un grosso
+  // contorno nero sulla sagoma esterna e contorni sottili su finestre,
+  // insegna e impianti sul tetto, lo stesso linguaggio usato per i gorilla
+  // in v1.7.0. Struttura isometrica (facciata/fianco/tetto) invariata.
   const oc=document.createElement('canvas');
   const fw=Math.ceil(b.w), fh=Math.ceil(b.h);
   oc.width=fw+SW+2; oc.height=fh+TH+2;
   const g=oc.getContext('2d');
   const p=b.pal;
+  const INK='#140d08';
   const rng=(()=>{let s=b.seed|0;return()=>{s=(s*9301+49297)%233280;return s/233280;};})();
 
   // ═══════════════════════════════════════
-  //  RIGHT SIDE FACE
+  //  RIGHT SIDE FACE — tinta piatta più scura
   // ═══════════════════════════════════════
-  g.beginPath();
-  g.moveTo(fw,TH); g.lineTo(fw+SW,0); g.lineTo(fw+SW,fh); g.lineTo(fw,fh+TH);
-  g.closePath();
-  const sideGrad=g.createLinearGradient(fw,0,fw+SW,0);
-  sideGrad.addColorStop(0,shade(p.side,.5));
-  sideGrad.addColorStop(1,shade(p.side,.9));
-  g.fillStyle=sideGrad; g.fill();
-
-  // side: skewed horizontal floor lines
-  g.save();
-  g.beginPath();
-  g.moveTo(fw,TH); g.lineTo(fw+SW,0); g.lineTo(fw+SW,fh); g.lineTo(fw,fh+TH);
-  g.clip();
+  const sidePath=()=>{g.moveTo(fw,TH); g.lineTo(fw+SW,0); g.lineTo(fw+SW,fh); g.lineTo(fw,fh+TH); g.closePath();};
+  g.beginPath(); sidePath(); g.fillStyle=p.side; g.fill();
+  // qualche finestrella piatta sul fianco, solo un filo di texture
+  g.save(); g.beginPath(); sidePath(); g.clip();
   const flH=Math.max(10,fh/Math.round(fh/16));
-  g.strokeStyle='rgba(0,0,0,.3)'; g.lineWidth=1;
-  for(let fy=TH;fy<=fh+TH;fy+=flH){
-    g.beginPath(); g.moveTo(fw,fy); g.lineTo(fw+SW,fy-TH); g.stroke();
-  }
-  // side: window glow slits
   for(let fy=TH+flH*.4;fy<fh;fy+=flH){
-    const wg=g.createLinearGradient(fw+1,0,fw+SW-1,0);
-    wg.addColorStop(0,'rgba(0,0,0,0)');
-    wg.addColorStop(.4,p.win+'99');
-    wg.addColorStop(1,'rgba(0,0,0,.1)');
-    g.fillStyle=wg; g.fillRect(fw+1,fy,SW-2,6);
+    if(rng()>.5) continue;
+    g.fillStyle=shade(p.side,1.3);
+    g.fillRect(fw+2,fy,SW-4,4);
   }
   g.restore();
 
   // ═══════════════════════════════════════
-  //  TOP / ROOF FACE
+  //  TOP / ROOF FACE — tinta piatta più chiara
   // ═══════════════════════════════════════
-  g.beginPath();
-  g.moveTo(0,TH); g.lineTo(fw,TH); g.lineTo(fw+SW,0); g.lineTo(SW,0);
-  g.closePath();
-  const roofGrad=g.createLinearGradient(0,TH,fw+SW,0);
-  roofGrad.addColorStop(0,shade(p.roof,2.2));
-  roofGrad.addColorStop(.5,shade(p.roof,1.6));
-  roofGrad.addColorStop(1,shade(p.roof,1.0));
-  g.fillStyle=roofGrad; g.fill();
+  const roofPath=()=>{g.moveTo(0,TH); g.lineTo(fw,TH); g.lineTo(fw+SW,0); g.lineTo(SW,0); g.closePath();};
+  g.beginPath(); roofPath(); g.fillStyle=p.roof; g.fill();
 
-  // roof: HVAC units & water tanks
-  g.save();
-  g.beginPath();
-  g.moveTo(0,TH); g.lineTo(fw,TH); g.lineTo(fw+SW,0); g.lineTo(SW,0); g.clip();
+  // roof: impianti/HVAC — scatole piatte con contorno, niente gradienti
+  g.save(); g.beginPath(); roofPath(); g.clip();
   const nEquip=Math.max(1,Math.floor(fw/45));
   for(let ei=0;ei<nEquip;ei++){
     const ex=6+ei*(fw/nEquip)+rng()*(fw/nEquip)*.5;
     const ew=8+rng()*18, eh=4+rng()*7;
-    // box face
-    g.fillStyle=shade(p.roof,1.4);
-    g.fillRect(ex,TH-eh,ew,eh);
-    // box top (skewed)
-    g.fillStyle=shade(p.roof,2.5);
-    g.beginPath();
-    g.moveTo(ex,TH-eh);
-    g.lineTo(ex+ew,TH-eh);
-    g.lineTo(ex+ew+SW*.3,TH-eh-TH*.4);
-    g.lineTo(ex+SW*.3,TH-eh-TH*.4);
-    g.closePath(); g.fill();
-    // box right side
-    g.fillStyle=shade(p.roof,.7);
-    g.beginPath();
-    g.moveTo(ex+ew,TH-eh);
-    g.lineTo(ex+ew+SW*.3,TH-eh-TH*.4);
-    g.lineTo(ex+ew+SW*.3,TH-TH*.4);
-    g.lineTo(ex+ew,TH);
-    g.closePath(); g.fill();
+    g.fillStyle=shade(p.roof,.82); g.strokeStyle=INK; g.lineWidth=1.2;
+    g.beginPath(); g.rect(ex,TH-eh,ew,eh); g.fill(); g.stroke();
   }
   g.restore();
 
-  // Rooftop neon trim
-  g.strokeStyle=p.trim; g.lineWidth=2;
-  g.shadowColor=p.trim; g.shadowBlur=10;
-  g.beginPath(); g.moveTo(0,TH); g.lineTo(fw,TH); g.stroke();
-  g.beginPath(); g.moveTo(0,TH); g.lineTo(SW,0); g.stroke();
-  g.shadowBlur=0;
-
   // ═══════════════════════════════════════
-  //  FRONT FACE — modern glass curtain wall
+  //  FRONT FACE — tinta piatta unica
   // ═══════════════════════════════════════
-  // Base concrete/steel gradient
-  const faceGrad=g.createLinearGradient(0,TH,fw,TH+fh);
-  faceGrad.addColorStop(0,shade(p.face,1.15));
-  faceGrad.addColorStop(.45,p.face);
-  faceGrad.addColorStop(1,shade(p.face,.75));
-  g.fillStyle=faceGrad; g.fillRect(0,TH,fw,fh);
+  g.fillStyle=p.face; g.fillRect(0,TH,fw,fh);
 
-  // Ambient occlusion — darker edges
-  const aoLeft=g.createLinearGradient(0,TH,fw*.25,TH);
-  aoLeft.addColorStop(0,'rgba(0,0,0,.45)'); aoLeft.addColorStop(1,'rgba(0,0,0,0)');
-  g.fillStyle=aoLeft; g.fillRect(0,TH,fw*.25,fh);
-  const aoRight=g.createLinearGradient(fw*.75,TH,fw,TH);
-  aoRight.addColorStop(0,'rgba(0,0,0,0)'); aoRight.addColorStop(1,'rgba(0,0,0,.35)');
-  g.fillStyle=aoRight; g.fillRect(fw*.75,TH,fw*.25,fh);
-
-  // Window grid — proper curtain wall
-  const cw2=Math.max(13,fw/Math.round(fw/20)); // column width
-  const rh2=Math.max(11,fh/Math.round(fh/17)); // row height
+  // Griglia finestre: piatte, con sottile contorno nero al posto del bagliore
+  const cw2=Math.max(13,fw/Math.round(fw/20));
+  const rh2=Math.max(11,fh/Math.round(fh/17));
   const nCols=Math.floor(fw/cw2);
   const nRows=Math.floor(fh/rh2);
   const mullW=2.5, mullH=2.5;
-
   for(let col=0;col<nCols;col++){
     for(let row=0;row<nRows;row++){
-      const wx=col*cw2+mullW/2;
-      const wy=TH+row*rh2+mullH/2;
-      const ww=cw2-mullW;
-      const wh=rh2-mullH;
+      const wx=col*cw2+mullW/2, wy=TH+row*rh2+mullH/2;
+      const ww=cw2-mullW, wh=rh2-mullH;
       if(ww<4||wh<4) continue;
-
-      // Determine if window is lit (seeded random)
       const lit=rng()>.35;
-      const warmLight=rng()>.5;
-
-      if(lit){
-        // Lit window: warm/cool interior glow
-        const lc=warmLight?'#ffe8b0':p.win;
-        const litGrad=g.createRadialGradient(wx+ww/2,wy+wh/2,0,wx+ww/2,wy+wh/2,Math.max(ww,wh)*.7);
-        litGrad.addColorStop(0,lc+'ff');
-        litGrad.addColorStop(.5,lc+'cc');
-        litGrad.addColorStop(1,shade(lc,.5)+'88');
-        g.fillStyle=litGrad; g.fillRect(wx,wy,ww,wh);
-        // Window shine diagonal
-        g.fillStyle='rgba(255,255,255,.2)';
-        g.beginPath(); g.moveTo(wx,wy); g.lineTo(wx+ww*.55,wy); g.lineTo(wx,wy+wh*.45); g.closePath(); g.fill();
-        // Subtle glow bleed
-        g.shadowColor=lc; g.shadowBlur=6;
-        g.fillStyle=lc+'22'; g.fillRect(wx,wy,ww,wh);
-        g.shadowBlur=0;
-      } else {
-        // Dark window: sky/city reflection
-        const darkGrad=g.createLinearGradient(wx,wy,wx+ww,wy+wh);
-        darkGrad.addColorStop(0,'rgba(20,40,80,.75)');
-        darkGrad.addColorStop(.5,p.face+'44');
-        darkGrad.addColorStop(1,'rgba(0,0,0,.65)');
-        g.fillStyle=darkGrad; g.fillRect(wx,wy,ww,wh);
-        // Specular reflection slash
-        if(rng()>.5){
-          g.fillStyle='rgba(120,180,255,.08)';
-          g.beginPath(); g.moveTo(wx,wy); g.lineTo(wx+ww*.7,wy); g.lineTo(wx,wy+wh*.6); g.closePath(); g.fill();
-        }
-      }
-
-      // Mullion lines (horizontal + vertical structural frame)
-      g.strokeStyle='rgba(0,0,0,.55)'; g.lineWidth=mullW;
+      g.fillStyle=lit?p.win:shade(p.face,.5);
+      g.fillRect(wx,wy,ww,wh);
+      g.strokeStyle=INK; g.lineWidth=1.2;
       g.strokeRect(wx,wy,ww,wh);
     }
   }
 
-  // Vertical structural fins / pilasters
-  const nFins=Math.max(2,Math.round(fw/50));
-  for(let fi=0;fi<=nFins;fi++){
-    const fx=fi*(fw/nFins);
-    g.fillStyle=shade(p.face,1.4)+'99';
-    g.fillRect(fx-1.5,TH,3,fh);
-    // neon edge on fin
-    g.fillStyle=p.trim+'33';
-    g.fillRect(fx-.5,TH,1,fh);
-  }
-
-  // ── SETBACK / TERRACE (tall buildings only) ──────────────
+  // ── SETBACK / TERRAZZA (solo edifici alti) ────────────────
   if(fh>CH*.4&&fw>55){
-    const tY=TH+fh*.32;
-    const tDepth=rnd(8,18);
-    const tW=fw*.15+rng()*fw*.2; // setback inset
-    // Terrace ledge top
-    g.fillStyle=shade(p.roof,1.8);
-    g.fillRect(0,tY,fw,tDepth);
-    // Terrace AO
-    const taGrad=g.createLinearGradient(0,tY,0,tY+tDepth);
-    taGrad.addColorStop(0,shade(p.face,.6)+'cc'); taGrad.addColorStop(1,'rgba(0,0,0,0)');
-    g.fillStyle=taGrad; g.fillRect(0,tY,fw,tDepth);
-    // Terrace neon rail
-    g.strokeStyle=p.trim+'aa'; g.lineWidth=1.5;
-    g.shadowColor=p.trim; g.shadowBlur=6;
+    const tY=TH+fh*.32, tDepth=rnd(8,18);
+    g.fillStyle=shade(p.roof,.88); g.fillRect(0,tY,fw,tDepth);
+    g.strokeStyle=INK; g.lineWidth=1.5;
     g.beginPath(); g.moveTo(0,tY); g.lineTo(fw,tY); g.stroke();
-    g.shadowBlur=0;
+    g.beginPath(); g.moveTo(0,tY+tDepth); g.lineTo(fw,tY+tDepth); g.stroke();
   }
 
-  // ── NEON BILLBOARD / SIGN ────────────────────────────────
-  const sY=TH+fh*.1;
-  const sH=Math.max(7,fh*.038);
-  g.fillStyle=p.sign+'20'; g.fillRect(5,sY-sH/2,fw-10,sH+1);
-  g.strokeStyle=p.sign+'60'; g.lineWidth=1;
-  g.strokeRect(5,sY-sH/2,fw-10,sH+1);
-  g.strokeStyle=p.sign; g.lineWidth=2;
-  g.shadowColor=p.sign; g.shadowBlur=16;
-  g.beginPath(); g.moveTo(7,sY); g.lineTo(fw-7,sY); g.stroke();
-  g.shadowBlur=0;
+  // ── INSEGNA — barra piatta col contorno nero, niente glow ──────────
+  const sY=TH+fh*.1, sH=Math.max(7,fh*.038);
+  g.fillStyle=p.sign; g.strokeStyle=INK; g.lineWidth=1.5;
+  g.beginPath(); g.roundRect(6,sY-sH/2,fw-12,sH+2,2); g.fill(); g.stroke();
 
-  // ── SPIRE / ANTENNA ──────────────────────────────────────
+  // ── ANTENNA — linea e faro piatti ───────────────────────────────────
   const spX=fw*.3+rng()*fw*.4;
-  g.strokeStyle=shade(p.trim,1.1); g.lineWidth=2;
-  g.beginPath(); g.moveTo(spX,TH); g.lineTo(spX,TH-22); g.stroke();
-  // taper
-  g.strokeStyle=shade(p.trim,.9); g.lineWidth=1;
-  g.beginPath(); g.moveTo(spX,TH-22); g.lineTo(spX,TH-32); g.stroke();
-  // beacon
-  g.fillStyle=p.sign; g.shadowColor=p.sign; g.shadowBlur=12;
-  g.beginPath(); g.arc(spX,TH-32,3,0,TAU); g.fill(); g.shadowBlur=0;
-  // guy wires
-  g.strokeStyle=p.trim+'55'; g.lineWidth=.8;
-  g.beginPath(); g.moveTo(spX,TH-18); g.lineTo(spX-fw*.22,TH); g.stroke();
-  g.beginPath(); g.moveTo(spX,TH-18); g.lineTo(spX+fw*.22,TH); g.stroke();
+  g.strokeStyle=INK; g.lineWidth=2.4;
+  g.beginPath(); g.moveTo(spX,TH); g.lineTo(spX,TH-30); g.stroke();
+  g.fillStyle='#ff4d4d'; g.strokeStyle=INK; g.lineWidth=1;
+  g.beginPath(); g.arc(spX,TH-30,3,0,TAU); g.fill(); g.stroke();
 
-  // ── GROUND FLOOR / LOBBY ─────────────────────────────────
+  // ── PIANO TERRA / INGRESSO ──────────────────────────────────────────
   const lobH=Math.min(fh*.11,20);
-  g.fillStyle=shade(p.lobby,.8);
-  g.fillRect(0,TH+fh-lobH,fw,lobH);
-  // entrance arch
+  g.fillStyle=p.lobby; g.fillRect(0,TH+fh-lobH,fw,lobH);
+  g.strokeStyle=INK; g.lineWidth=1.5;
+  g.beginPath(); g.moveTo(0,TH+fh-lobH); g.lineTo(fw,TH+fh-lobH); g.stroke();
   const archW=Math.min(fw*.28,28);
-  g.fillStyle='rgba(0,0,0,.9)';
-  g.beginPath();
-  g.arc(fw/2,TH+fh,archW/2,Math.PI,0);
-  g.lineTo(fw/2+archW/2,TH+fh); g.lineTo(fw/2-archW/2,TH+fh);
-  g.closePath(); g.fill();
-  // lobby glow
-  const lgGrad=g.createRadialGradient(fw/2,TH+fh,0,fw/2,TH+fh,archW);
-  lgGrad.addColorStop(0,p.sign+'55'); lgGrad.addColorStop(1,'rgba(0,0,0,0)');
-  g.fillStyle=lgGrad; g.fillRect(fw/2-archW,TH+fh-lobH,archW*2,lobH);
+  g.fillStyle=INK;
+  g.beginPath(); g.arc(fw/2,TH+fh,archW/2,Math.PI,0);
+  g.lineTo(fw/2+archW/2,TH+fh); g.lineTo(fw/2-archW/2,TH+fh); g.closePath(); g.fill();
+  g.fillStyle=p.win;
+  g.beginPath(); g.arc(fw/2,TH+fh,archW/2-3,Math.PI,0);
+  g.lineTo(fw/2+archW/2-3,TH+fh); g.lineTo(fw/2-archW/2+3,TH+fh); g.closePath(); g.fill();
 
   // ═══════════════════════════════════════
-  //  CRATER HOLES  (destination-out punch)
+  //  CONTORNO ESTERNO — lega tutte le facce nel look "fumetto"
+  // ═══════════════════════════════════════
+  g.strokeStyle=INK; g.lineWidth=2.4;
+  g.beginPath();
+  g.moveTo(0,TH); g.lineTo(SW,0); g.lineTo(fw+SW,0); g.lineTo(fw+SW,fh);
+  g.lineTo(fw,fh+TH); g.lineTo(0,fh+TH); g.closePath();
+  g.stroke();
+
+  // ═══════════════════════════════════════
+  //  CRATERI (foro "destination-out" + anello di scorza piatto)
   // ═══════════════════════════════════════
   b.craters.forEach(cr=>{
     const lcx=cr.cx-b.x, lcy=cr.cy-b.y+TH;
-    // scorch ring (drawn BEFORE hole)
-    const sc=g.createRadialGradient(lcx,lcy,cr.r*.2,lcx,lcy,cr.r*1.3);
-    sc.addColorStop(0,'rgba(255,100,0,.5)');
-    sc.addColorStop(.6,'rgba(120,30,0,.25)');
-    sc.addColorStop(1,'rgba(0,0,0,0)');
-    g.fillStyle=sc; g.beginPath(); g.arc(lcx,lcy,cr.r*1.3,0,TAU); g.fill();
-    // punch hole
-    const hole=g.createRadialGradient(lcx,lcy,0,lcx,lcy,cr.r);
-    hole.addColorStop(0,'rgba(0,0,0,1)');
-    hole.addColorStop(.75,'rgba(0,0,0,.96)');
-    hole.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle='rgba(255,120,30,.45)';
+    g.beginPath(); g.arc(lcx,lcy,cr.r*1.2,0,TAU); g.fill();
     g.save(); g.globalCompositeOperation='destination-out';
-    g.fillStyle=hole; g.beginPath(); g.arc(lcx,lcy,cr.r,0,TAU); g.fill();
+    g.beginPath(); g.arc(lcx,lcy,cr.r,0,TAU); g.fill();
     g.restore();
+    g.strokeStyle=INK; g.lineWidth=1.5;
+    g.beginPath(); g.arc(lcx,lcy,cr.r,0,TAU); g.stroke();
   });
 
   b.off=oc;
@@ -701,6 +578,13 @@ function show(s){
 // vuoto sopra i palazzi in primo piano con un po' di profondità, senza
 // interferire in alcun modo con la logica di gioco (puramente decorativa).
 let skyline=null, skylineCW=-1;
+let clouds=null, cloudsCW=-1;
+function genClouds(){
+  const n=Math.max(3,Math.round(CW/260));
+  return Array.from({length:n},()=>({
+    x:rnd(CW*.05,CW*.95), y:rnd(CH*.06,CH*.3), r:rnd(14,26)
+  }));
+}
 function genSkyline(){
   const n=Math.max(7,Math.round(CW/62));
   const arr=[]; let x=0;
@@ -713,115 +597,81 @@ function genSkyline(){
   return arr;
 }
 function drawBg(){
-  // Deep space gradient
+  // Cielo piatto in stile cartoon: via le bande "aurora" e i bagliori neon
+  // (v1.3.0), dentro un gradiente verticale caldo da notte da fumetto, più
+  // qualche nuvola piatta col contorno al posto dell'effetto luminoso.
   const sg=ctx.createLinearGradient(0,0,0,CH);
-  sg.addColorStop(0,'#000306');
-  sg.addColorStop(.55,'#010c1c');
-  sg.addColorStop(1,'#061226');
+  sg.addColorStop(0,'#1a1140');
+  sg.addColorStop(.55,'#2c1a4d');
+  sg.addColorStop(1,'#432a5e');
   ctx.fillStyle=sg; ctx.fillRect(0,0,CW,CH);
 
-  // Aurora: due bande di colore morbide e molto tenui, per rompere il
-  // fondo completamente piatto senza distrarre dal gioco.
-  ctx.save(); ctx.globalCompositeOperation='screen';
-  const au1=ctx.createRadialGradient(CW*.15,CH*.12,0,CW*.15,CH*.12,CW*.55);
-  au1.addColorStop(0,'rgba(0,245,200,.07)'); au1.addColorStop(1,'rgba(0,245,200,0)');
-  ctx.fillStyle=au1; ctx.fillRect(0,0,CW,CH*.6);
-  const au2=ctx.createRadialGradient(CW*.7,CH*.05,0,CW*.7,CH*.05,CW*.5);
-  au2.addColorStop(0,'rgba(255,45,111,.06)'); au2.addColorStop(1,'rgba(255,45,111,0)');
-  ctx.fillStyle=au2; ctx.fillRect(0,0,CW,CH*.55);
-  ctx.restore();
+  // Nuvole piatte: poche sagome tonde sovrapposte col contorno nero —
+  // il tocco "da fumetto" al posto delle bande aurora di prima.
+  if(!clouds||cloudsCW!==CW){ clouds=genClouds(); cloudsCW=CW; }
+  clouds.forEach(c=>{
+    ctx.save(); ctx.globalAlpha=.45;
+    ctx.fillStyle='#6b4f8f'; ctx.strokeStyle='#140d08'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.arc(c.x,c.y,c.r,0,TAU);
+    ctx.arc(c.x+c.r*.8,c.y+c.r*.25,c.r*.7,0,TAU);
+    ctx.arc(c.x-c.r*.8,c.y+c.r*.3,c.r*.6,0,TAU);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  });
 
-  // Stars
+  // Stelle — restano semplici puntini piatti, nessun bagliore da togliere
   state.stars.forEach(s=>{
     const tw=.2+.8*Math.abs(Math.sin(state.t*.38+s.phase));
     ctx.globalAlpha=tw*(s.bright?.92:.35);
-    ctx.fillStyle=s.bright?'#ffffff':'#88aacc';
+    ctx.fillStyle=s.bright?'#ffffff':'#cbb8ea';
     ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,TAU); ctx.fill();
-    if(s.bright){
-      ctx.globalAlpha=tw*.2; ctx.strokeStyle='#cce8ff'; ctx.lineWidth=.5;
-      const sp=s.r*6;
-      ctx.beginPath();
-      ctx.moveTo(s.x-sp,s.y); ctx.lineTo(s.x+sp,s.y);
-      ctx.moveTo(s.x,s.y-sp); ctx.lineTo(s.x,s.y+sp);
-      ctx.stroke();
-    }
   });
   ctx.globalAlpha=1;
 
-  // Moon
+  // Luna — cerchio piatto con contorno nero e crateri piatti, niente alone
   const mr=Math.max(18,CW*.033),mx=CW*.83,my=CH*.1;
   ctx.save();
-  const ag=ctx.createRadialGradient(mx,my,mr,mx,my,mr*4);
-  ag.addColorStop(0,'rgba(160,210,255,.06)'); ag.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(mx,my,mr*4,0,TAU); ctx.fill();
-  const mg=ctx.createRadialGradient(mx-mr*.32,my-mr*.32,0,mx,my,mr);
-  mg.addColorStop(0,'#f0f8ff'); mg.addColorStop(.55,'#c0d8f0'); mg.addColorStop(1,'#88a8c8');
-  ctx.fillStyle=mg; ctx.shadowColor='rgba(180,220,255,.3)'; ctx.shadowBlur=20;
-  ctx.beginPath(); ctx.arc(mx,my,mr,0,TAU); ctx.fill(); ctx.shadowBlur=0;
-  ctx.fillStyle='rgba(1,3,10,.5)';
-  ctx.beginPath(); ctx.arc(mx+mr*.3,my,mr*.83,0,TAU); ctx.fill();
+  ctx.fillStyle='#fff3cf'; ctx.strokeStyle='#140d08'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(mx,my,mr,0,TAU); ctx.fill(); ctx.stroke();
   [[-.28,-.22,.18],[.15,.1,.11],[-.05,.3,.09]].forEach(([dx,dy,r])=>{
-    ctx.fillStyle='rgba(90,130,170,.18)';
+    ctx.fillStyle='rgba(180,150,90,.35)';
     ctx.beginPath(); ctx.arc(mx+dx*mr,my+dy*mr,r*mr,0,TAU); ctx.fill();
   });
   ctx.restore();
 
-  // Velivolo lontano: un puntino luminoso che attraversa lentamente il cielo,
-  // con una scia sottile — un tocco di vita nel grande vuoto sopra i palazzi.
+  // Velivolo lontano: un puntino piatto che attraversa lentamente il cielo —
+  // un tocco di vita nel grande vuoto sopra i palazzi, senza più bagliore.
   const acT=(state.t*.045)%1.6;
   if(acT<1){
     const acx=CW*(-.08+acT*1.16), acy=CH*(.22+.05*Math.sin(acT*6.2));
     const blink=Math.sin(state.t*7)>.55;
     ctx.save();
-    ctx.strokeStyle='rgba(180,210,255,.25)'; ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(acx-14,acy); ctx.lineTo(acx-2,acy); ctx.stroke();
-    if(blink){
-      ctx.fillStyle='#ffd8d8'; ctx.shadowColor='#ff6666'; ctx.shadowBlur=6;
-      ctx.beginPath(); ctx.arc(acx,acy,1.4,0,TAU); ctx.fill();
-    }
-    ctx.fillStyle='rgba(200,220,255,.7)'; ctx.shadowColor='#a0c8ff'; ctx.shadowBlur=4;
-    ctx.beginPath(); ctx.arc(acx+2,acy,1,0,TAU); ctx.fill();
+    if(blink){ ctx.fillStyle='#ff6666'; ctx.beginPath(); ctx.arc(acx,acy,1.6,0,TAU); ctx.fill(); }
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(acx+2,acy,1.2,0,TAU); ctx.fill();
     ctx.restore();
   }
 
-  // Skyline distante: silhouette basse e desaturate a metà cielo, dietro ai
-  // palazzi giocabili (disegnati sopra da drawBuildings), per dare profondità
-  // invece del vuoto piatto — specie evidente in verticale su smartphone.
+  // Skyline distante: sagome piatte a metà cielo, dietro ai palazzi giocabili
+  // (disegnati sopra da drawBuildings), per dare profondità invece del vuoto
+  // piatto — specie evidente in verticale su smartphone.
   if(!skyline||skylineCW!==CW){ skyline=genSkyline(); skylineCW=CW; }
   const skyBase=CH*.60;
-  ctx.save();
-  const haze=ctx.createLinearGradient(0,skyBase-CH*.28,0,skyBase);
-  haze.addColorStop(0,'rgba(4,14,26,0)'); haze.addColorStop(1,'rgba(4,14,26,.55)');
   skyline.forEach(b=>{
     const by=skyBase-b.h;
-    ctx.fillStyle='rgba(8,20,38,.62)';
+    ctx.fillStyle='rgba(40,24,66,.75)';
     ctx.fillRect(b.x,by,Math.ceil(b.w)+1,b.h+50);
     if(b.lit){
       const wx=b.x+b.w*(.28+b.seed*.4), wy=by+b.h*(.22+b.seed*.3);
-      ctx.fillStyle='rgba(140,190,230,.16)';
+      ctx.fillStyle='rgba(255,230,160,.35)';
       ctx.fillRect(wx,wy,Math.max(2,b.w*.1),Math.max(2,b.h*.1));
     }
   });
-  ctx.fillStyle=haze; ctx.fillRect(0,skyBase-CH*.28,CW,CH*.28);
-  ctx.restore();
 
   // Wind HUD
   drawWindHUD();
-
-  // Horizon glow line
-  const hY=CH*.63;
-  const hg=ctx.createLinearGradient(0,0,CW,0);
-  hg.addColorStop(0,'rgba(0,200,160,0)');
-  hg.addColorStop(.25,'rgba(0,200,160,.45)');
-  hg.addColorStop(.5,'rgba(0,240,200,.8)');
-  hg.addColorStop(.75,'rgba(0,200,160,.45)');
-  hg.addColorStop(1,'rgba(0,200,160,0)');
-  ctx.strokeStyle=hg; ctx.lineWidth=1; ctx.shadowColor='#00f5c8'; ctx.shadowBlur=7;
-  ctx.beginPath(); ctx.moveTo(0,hY); ctx.lineTo(CW,hY); ctx.stroke(); ctx.shadowBlur=0;
-  // city sky glow above horizon
-  const fg=ctx.createLinearGradient(0,hY-60,0,hY);
-  fg.addColorStop(0,'rgba(0,0,0,0)'); fg.addColorStop(1,'rgba(0,30,60,.12)');
-  ctx.fillStyle=fg; ctx.fillRect(0,hY-60,CW,60);
 }
 
 function drawWindHUD(){
@@ -859,32 +709,23 @@ function drawBuildings(){
     if(!b.off) renderBuilding(b);
     // draw with 3-D offset: x unchanged, y shifted up by TH for top face
     ctx.drawImage(b.off, b.x-1, b.y-TH-1);
-    // scorch rings on main canvas (visible from outside crater)
+    // scorch ring piatta sul canvas principale (visibile fuori dal cratere)
     b.craters.forEach(cr=>{
-      const sg2=ctx.createRadialGradient(cr.cx,cr.cy,cr.r*.5,cr.cx,cr.cy,cr.r*1.6);
-      sg2.addColorStop(0,'rgba(255,80,0,.12)');
-      sg2.addColorStop(.5,'rgba(180,40,0,.08)');
-      sg2.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle=sg2; ctx.beginPath(); ctx.arc(cr.cx,cr.cy,cr.r*1.6,0,TAU); ctx.fill();
+      ctx.fillStyle='rgba(200,60,0,.1)';
+      ctx.beginPath(); ctx.arc(cr.cx,cr.cy,cr.r*1.5,0,TAU); ctx.fill();
     });
   });
 }
 
 // ─── DRAW: ROAD ───────────────────────────────────────────────
 function drawRoad(){
-  const rg=ctx.createLinearGradient(0,CH-ROAD_H,0,CH);
-  rg.addColorStop(0,'#0b1220'); rg.addColorStop(1,'#050810');
-  ctx.fillStyle=rg; ctx.fillRect(0,CH-ROAD_H,CW,ROAD_H);
-  ctx.strokeStyle='rgba(0,200,160,.28)'; ctx.lineWidth=1.5; ctx.shadowColor='#00f5c8'; ctx.shadowBlur=5;
-  ctx.beginPath(); ctx.moveTo(0,CH-ROAD_H); ctx.lineTo(CW,CH-ROAD_H); ctx.stroke(); ctx.shadowBlur=0;
-  ctx.setLineDash([22,16]); ctx.strokeStyle='rgba(255,190,0,.22)'; ctx.lineWidth=1.5;
+  // Strada piatta: via il bagliore neon sul bordo e i riflessi sfumati,
+  // dentro un confine netto col contorno nero, coerente col resto cartoon.
+  ctx.fillStyle='#241433'; ctx.fillRect(0,CH-ROAD_H,CW,ROAD_H);
+  ctx.strokeStyle='#140d08'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,CH-ROAD_H); ctx.lineTo(CW,CH-ROAD_H); ctx.stroke();
+  ctx.setLineDash([22,16]); ctx.strokeStyle='rgba(255,210,80,.55)'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(0,CH-12); ctx.lineTo(CW,CH-12); ctx.stroke(); ctx.setLineDash([]);
-  // per-building wet reflections
-  state.buildings.forEach(b=>{
-    const rc=ctx.createLinearGradient(b.x+b.w/2,CH-ROAD_H,b.x+b.w/2,CH);
-    rc.addColorStop(0,b.pal.sign+'1a'); rc.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=rc; ctx.fillRect(b.x+b.w/2-12,CH-ROAD_H,ROAD_H,ROAD_H);
-  });
 }
 
 // ─── DRAW: GORILLA ────────────────────────────────────────────
