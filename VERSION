@@ -1,4 +1,4 @@
-1.10.1
+1.11.0
 
 Changelog
 =========
@@ -7,6 +7,44 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.11.0 — 2026-10-16
+---------------------
+Ultimo passo del redesign cartoon, iniziato col semplice "procediamo con lo sviluppo"
+dell'utente: l'HUD (punteggio, turno, barra potenza/angolo, barra del vento), rimasto in
+stile neon da v1.3.0 e segnalato come "prossimo passo" in ogni changelog da v1.8.0 in poi.
+
+Modificato:
+- **Pannello HUD**: via il gradiente e la linea inferiore con bagliore neon, dentro una
+  tinta piatta viola/indaco (stesso tono del cielo di v1.8.0) con un confine nero netto.
+- **Testo "adesivo"** (nuova funzione `stickerText()`, condivisa da HUD e barra del
+  vento): contorno nero spesso + riempimento piatto colorato, al posto del vecchio testo
+  con ombra colorata/`shadowBlur`. Usato per punteggio P1/P2, etichetta di turno/fase e
+  lettura del vento.
+- **Barra potenza**: segmenti con riempimento piatto e sottile contorno nero invece del
+  bagliore colorato per segmento; la pulsazione durante la carica resta ma ora è solo
+  un'oscillazione di opacità, senza più blur. Cornice della barra piatta (colore banana più
+  spessa mentre si carica, invece del bagliore animato).
+- **Barra del vento**: capsula a tinta piatta con contorno nero invece del bordo
+  semitrasparente col bagliore; riempimento piatto invece del gradiente; freccia piena col
+  contorno nero invece del bagliore.
+- Nessun cambiamento alla logica di gioco: punteggio, fasi, calcolo di potenza/angolo e
+  vento restano identici — cambia solo come vengono disegnati.
+
+Corretto (bug introdotto e preso prima della consegna):
+- **Macchia nera enorme sugli angoli del punteggio.** La prima versione di `stickerText()`
+  calcolava lo spessore del contorno con `parseInt(font,10)`, che su una stringa di font
+  con peso numerico (es. `"900 15px Orbitron"`) legge il PRIMO numero della stringa — il
+  peso (900), non la dimensione in px. Il contorno del testo diventava spesso ~144px
+  invece di ~2-3px, producendo una macchia nera che copriva un quarto di schermo sopra il
+  punteggio. Trovato durante la verifica visiva di routine (non dall'utente): corretto
+  estraendo specificamente il numero seguito da "px" dalla stringa del font con una regex,
+  invece di leggere il primo numero qualsiasi.
+
+Verificato: `node --check` per la sintassi; rieseguiti i test di regressione (mira a
+360°, fusione crateri) — ancora validi; screenshot automatizzati (browser headless) in
+landscape e portrait di tutte le schermate con l'HUD visibile, prima e dopo il fix del bug
+sopra, per confermare che il testo sia leggibile e nessuna macchia nera resti a schermo.
 
 v1.10.1 — 2026-10-16
 ---------------------
