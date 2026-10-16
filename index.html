@@ -133,7 +133,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.6.0';
+const VERSION='1.7.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -889,31 +889,37 @@ function drawRoad(){
 
 // ─── DRAW: GORILLA ────────────────────────────────────────────
 function drawGorilla(g,player,celebrating,throwing,bp){
-  // Stile "neon silhouette": corpo scuro (quasi nero, tinto del colore squadra)
-  // con un bordo neon luminoso sul contorno invece del vecchio riempimento
-  // piatto a tinta unita — molto più leggibile e "a tema" del semplice blob
-  // colorato, con muso/palmi chiari per il contrasto e un emblema sul petto
-  // come accento identificativo.
-  const col=player===0?C.p1:C.p2;
-  const base=player===0?'#002018':'#380010'; // corpo scuro, stesso tono usato prima come "fur"
-  const skin='#f0dcae'; // muso/palmi/piante: tono chiaro neutro, stesso per entrambi i giocatori
+  // Stile "cartoon": via il corpo scuro col bordo neon (v1.3.0), dentro un
+  // pelo a tinta piatta nel colore squadra con un grosso contorno nero pieno
+  // su ogni sagoma (il classico "outline + flat fill" da fumetto), muso/palmi
+  // in un tono crema caldo condiviso, un'unica macchia più scura dello stesso
+  // colore per dare un minimo di volume senza gradienti — niente più
+  // shadowBlur/glow da nessuna parte sul gorilla. Stesse identiche pose di
+  // mira/lancio/esultanza e stesse coordinate della sagoma usate dalla
+  // fisica (bounding box GW/GH e hitbox ellittica invariate): cambia solo
+  // come viene disegnato, non la sua forma o il suo ingombro.
+  const col=player===0?C.p1:C.p2;      // pelo: colore pieno e saturo della squadra
+  const dk=shade(col,.6);              // stessa tinta, più scura: accenti/ombra piatta
+  const skin='#ffdfb0';                // muso/palmi/piante: crema caldo, condiviso
+  const INK='#17100a';                 // contorno nero caldo, unico su tutto il corpo
   const S=GW/64;
   ctx.save(); ctx.translate(g.x,g.y); ctx.scale(S,S);
-  // fill semplice, nessun bordo (dettagli interni: naso, sopracciglio, bocca...)
-  const F=(fn,c,sh)=>{if(sh){ctx.shadowColor=sh;ctx.shadowBlur=12;}ctx.fillStyle=c;ctx.beginPath();fn();ctx.fill();ctx.shadowBlur=0;};
-  // fill scuro + sottile bordo neon luminoso: per le sagome principali (testa, busto, orecchie, piedi/mani)
-  const E=(fn,c)=>{
-    ctx.fillStyle=base; ctx.beginPath(); fn(); ctx.fill();
-    ctx.shadowColor=c; ctx.shadowBlur=9; ctx.strokeStyle=c; ctx.lineWidth=1.8;
-    ctx.beginPath(); fn(); ctx.stroke(); ctx.shadowBlur=0;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  // riempimento piatto, nessun contorno: per i dettagli piccoli (naso, pupille, denti...)
+  const F=(fn,c)=>{ctx.fillStyle=c;ctx.beginPath();fn();ctx.fill();};
+  // riempimento piatto + grosso contorno nero: per le sagome principali
+  // (testa, busto, orecchie, mani/piedi, muso)
+  const E=(fn,c,lw)=>{
+    ctx.fillStyle=c; ctx.beginPath(); fn(); ctx.fill();
+    ctx.strokeStyle=INK; ctx.lineWidth=lw||2.4;
+    ctx.beginPath(); fn(); ctx.stroke();
   };
-  // arto (braccio/gamba): passata larga luminosa sotto + passata scura sopra,
-  // lascia un filo di neon visibile lungo tutto il bordo dell'arto
+  // arto (braccio/gamba): passata nera larga sotto + passata del colore
+  // squadra sopra, stesso effetto "contorno pieno" di un arto disegnato a mano
   const L=(fn,w)=>{
-    ctx.lineCap='round'; ctx.lineJoin='round';
-    ctx.shadowColor=col; ctx.shadowBlur=8; ctx.strokeStyle=col; ctx.lineWidth=w+3;
-    ctx.beginPath(); fn(); ctx.stroke(); ctx.shadowBlur=0;
-    ctx.strokeStyle=base; ctx.lineWidth=w;
+    ctx.strokeStyle=INK; ctx.lineWidth=w+3.4;
+    ctx.beginPath(); fn(); ctx.stroke();
+    ctx.strokeStyle=col; ctx.lineWidth=w;
     ctx.beginPath(); fn(); ctx.stroke();
   };
   // legs
@@ -921,22 +927,20 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   L(()=>{ctx.moveTo(43,63);ctx.quadraticCurveTo(53,74,57,83);},14);
   E(()=>{ctx.ellipse(7,83,11,5,-.2,0,TAU);},col);
   E(()=>{ctx.ellipse(57,83,11,5,.2,0,TAU);},col);
-  [-3,0,3].forEach(d=>{F(()=>{ctx.arc(4+d,81,1.6,0,TAU);},base);F(()=>{ctx.arc(54+d,81,1.6,0,TAU);},base);});
-  // torso — spalle più larghe e petto più pieno del vecchio "blob" stretto
+  [-3,0,3].forEach(d=>{F(()=>{ctx.arc(4+d,81,1.6,0,TAU);},dk);F(()=>{ctx.arc(54+d,81,1.6,0,TAU);},dk);});
+  // torso — spalle larghe e petto pieno
   const torso=()=>{ctx.moveTo(6,73);ctx.bezierCurveTo(-2,50,-1,26,9,16);ctx.bezierCurveTo(18,7,46,7,55,16);ctx.bezierCurveTo(65,26,66,50,58,73);ctx.closePath();};
   E(torso,col);
-  // torso volume: leggero effetto di luce che avvolge il busto scuro
+  // un solo riflesso piatto (niente gradienti) per dare un filo di volume al busto
   ctx.save(); ctx.beginPath(); torso(); ctx.clip();
-  const tvg=ctx.createLinearGradient(0,0,64,0);
-  tvg.addColorStop(0,'rgba(0,0,0,.35)');tvg.addColorStop(.42,'rgba(255,255,255,.16)');tvg.addColorStop(1,'rgba(0,0,0,.4)');
-  ctx.fillStyle=tvg;ctx.fillRect(0,0,64,88);ctx.restore();
-  // pettorali: patch chiare, danno volume e contrasto sul busto scuro
-  F(()=>{ctx.ellipse(23,38,11,8,-.1,0,TAU);},skin+'30');
-  F(()=>{ctx.ellipse(43,38,11,8,.1,0,TAU);},skin+'30');
-  // emblema sul petto: accento neon pieno, "cuore" luminoso della sagoma scura
-  F(()=>{ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45);ctx.bezierCurveTo(19,52,26,58,32,63);ctx.bezierCurveTo(38,58,45,52,45,45);ctx.bezierCurveTo(45,38,40,32,32,32);ctx.closePath();},col,col);
-  ctx.save(); ctx.globalAlpha=.55; ctx.strokeStyle='#fff'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45); ctx.stroke(); ctx.restore();
+  F(()=>{ctx.ellipse(20,28,14,22,-.15,0,TAU);},'rgba(255,255,255,.18)');
+  ctx.restore();
+  // pettorali: macchie piatte più scure, un po' di struttura sul busto
+  F(()=>{ctx.ellipse(23,38,11,8,-.1,0,TAU);},dk+'55');
+  F(()=>{ctx.ellipse(43,38,11,8,.1,0,TAU);},dk+'55');
+  // emblema sul petto: distintivo piatto scuro con contorno nero + riflesso
+  E(()=>{ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45);ctx.bezierCurveTo(19,52,26,58,32,63);ctx.bezierCurveTo(38,58,45,52,45,45);ctx.bezierCurveTo(45,38,40,32,32,32);ctx.closePath();},dk,1.6);
+  F(()=>{ctx.moveTo(32,34);ctx.bezierCurveTo(27,34,23,39,23,45);ctx.lineTo(27,45);ctx.bezierCurveTo(27,41,29,38,32,37);ctx.closePath();},'rgba(255,255,255,.35)');
   // arms
   if(throwing){
     L(()=>{ctx.moveTo(11,25);ctx.bezierCurveTo(-4,13,-10,3,-14,-4);},14);
@@ -955,38 +959,34 @@ function drawGorilla(g,player,celebrating,throwing,bp){
     L(()=>{ctx.moveTo(53,25);ctx.bezierCurveTo(64,42,67,58,64,69);},14);
     E(()=>{ctx.arc(0,69,8,0,TAU);},col);E(()=>{ctx.arc(64,69,8,0,TAU);},col);
     F(()=>{ctx.arc(0,69,5,0,TAU);},skin);F(()=>{ctx.arc(64,69,5,0,TAU);},skin);
-    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(-3+d,67,2,0,TAU);},base);F(()=>{ctx.arc(61+d,67,2,0,TAU);},base);});
+    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(-3+d,67,2,0,TAU);},dk);F(()=>{ctx.arc(61+d,67,2,0,TAU);},dk);});
   }
   // neck
-  F(()=>{ctx.moveTo(22,18);ctx.lineTo(42,18);ctx.lineTo(40,10);ctx.lineTo(24,10);ctx.closePath();},base);
+  F(()=>{ctx.moveTo(22,18);ctx.lineTo(42,18);ctx.lineTo(40,10);ctx.lineTo(24,10);ctx.closePath();},dk);
   // head
   E(()=>{ctx.ellipse(32,10,19,15,0,0,TAU);},col);
-  // head volume
+  // riflesso piatto sulla testa, stesso trucco del busto
   ctx.save();ctx.beginPath();ctx.ellipse(32,10,19,15,0,0,TAU);ctx.clip();
-  const hvg=ctx.createRadialGradient(24,3,1,32,10,21);
-  hvg.addColorStop(0,'rgba(255,255,255,.18)');hvg.addColorStop(1,'rgba(0,0,0,.3)');
-  ctx.fillStyle=hvg;ctx.fillRect(13,-5,38,30);ctx.restore();
-  // crest — accento neon pieno in cima alla testa
-  F(()=>{ctx.moveTo(22,1);ctx.bezierCurveTo(24,-6,40,-6,42,1);ctx.bezierCurveTo(44,6,40,8,32,8);ctx.bezierCurveTo(24,8,20,6,22,1);ctx.closePath();},col,col);
+  F(()=>{ctx.ellipse(24,3,9,7,-.2,0,TAU);},'rgba(255,255,255,.22)');
+  ctx.restore();
+  // crest — ciuffo piatto più scuro in cima alla testa, con contorno
+  E(()=>{ctx.moveTo(22,1);ctx.bezierCurveTo(24,-6,40,-6,42,1);ctx.bezierCurveTo(44,6,40,8,32,8);ctx.bezierCurveTo(24,8,20,6,22,1);ctx.closePath();},dk,1.6);
   // brow — cresta sopraccigliare scura e pronunciata
-  F(()=>{ctx.moveTo(12,11);ctx.bezierCurveTo(17,3,47,3,52,11);ctx.lineTo(52,17);ctx.lineTo(12,17);ctx.closePath();},base);
-  ctx.save();ctx.globalAlpha=.7;ctx.strokeStyle=col;ctx.lineWidth=1.2;ctx.shadowColor=col;ctx.shadowBlur=4;
-  ctx.beginPath();ctx.moveTo(14,10);ctx.bezierCurveTo(20,4,44,4,50,10);ctx.stroke();ctx.shadowBlur=0;ctx.restore();
-  // ears — esterno scuro con bordo neon, interno luminoso pieno
+  F(()=>{ctx.moveTo(12,11);ctx.bezierCurveTo(17,3,47,3,52,11);ctx.lineTo(52,17);ctx.lineTo(12,17);ctx.closePath();},dk);
+  // ears — esterno piatto nel colore squadra, interno piatto più scuro
   E(()=>{ctx.arc(13,10,7.5,0,TAU);},col);E(()=>{ctx.arc(51,10,7.5,0,TAU);},col);
-  F(()=>{ctx.arc(13,10,3.4,0,TAU);},col,col);F(()=>{ctx.arc(51,10,3.4,0,TAU);},col,col);
-  // muzzle
-  E(()=>{ctx.ellipse(32,21,14,11,0,0,TAU);},col);
-  F(()=>{ctx.ellipse(32,25,9.5,7.5,0,0,TAU);},skin);
+  F(()=>{ctx.arc(13,10,3.4,0,TAU);},dk);F(()=>{ctx.arc(51,10,3.4,0,TAU);},dk);
+  // muzzle — un unico muso crema con contorno nero, più semplice e più "cartoon"
+  E(()=>{ctx.ellipse(32,22,13,10,0,0,TAU);},skin);
   // nose
-  F(()=>{ctx.ellipse(25,19,4,3,-.3,0,TAU);},col,col);F(()=>{ctx.ellipse(39,19,4,3,.3,0,TAU);},col,col);
+  F(()=>{ctx.ellipse(25,19,4,3,-.3,0,TAU);},dk);F(()=>{ctx.ellipse(39,19,4,3,.3,0,TAU);},dk);
   F(()=>{ctx.ellipse(25,20,2.2,1.6,-.3,0,TAU);},'#111');F(()=>{ctx.ellipse(39,20,2.2,1.6,.3,0,TAU);},'#111');
-  // eyes — più grandi per restare leggibili anche piccoli
-  F(()=>{ctx.arc(21,12,6.6,0,TAU);},base);F(()=>{ctx.arc(43,12,6.6,0,TAU);},base);
-  F(()=>{ctx.arc(21,12,4.3,0,TAU);},'#f0e8d0');F(()=>{ctx.arc(43,12,4.3,0,TAU);},'#f0e8d0');
-  F(()=>{ctx.arc(21,12,2.6,0,TAU);},'#180e00');F(()=>{ctx.arc(43,12,2.6,0,TAU);},'#180e00');
-  F(()=>{ctx.arc(21,12,1.2,0,TAU);},'#000');F(()=>{ctx.arc(43,12,1.2,0,TAU);},'#000');
-  F(()=>{ctx.arc(22.3,10.8,1,0,TAU);},col,col);F(()=>{ctx.arc(44.3,10.8,1,0,TAU);},col,col);
+  // eyes — grandi e bianchi: pupilla nera piena e un riflesso bianco fisso,
+  // il tocco più "cartoon" al posto del vecchio puntino colorato luminoso
+  F(()=>{ctx.arc(21,12,6.6,0,TAU);},INK);F(()=>{ctx.arc(43,12,6.6,0,TAU);},INK);
+  F(()=>{ctx.arc(21,12,4.6,0,TAU);},'#fff');F(()=>{ctx.arc(43,12,4.6,0,TAU);},'#fff');
+  F(()=>{ctx.arc(21,12,2.7,0,TAU);},INK);F(()=>{ctx.arc(43,12,2.7,0,TAU);},INK);
+  F(()=>{ctx.arc(22.4,10.6,1.1,0,TAU);},'#fff');F(()=>{ctx.arc(44.4,10.6,1.1,0,TAU);},'#fff');
   // mouth
   if(celebrating){
     F(()=>{ctx.ellipse(32,28,8,6,0,0,TAU);},'#600000');
@@ -994,7 +994,7 @@ function drawGorilla(g,player,celebrating,throwing,bp){
     [27,31,35].forEach(tx=>F(()=>{ctx.rect(tx,28,3,3.5);},'#ffe0c0'));
     F(()=>{ctx.ellipse(32,32,4,3.5,0,0,TAU);},'#bb2233');
   } else {
-    ctx.strokeStyle=base;ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.strokeStyle=INK;ctx.lineWidth=2;
     ctx.beginPath();ctx.moveTo(24,28);ctx.bezierCurveTo(28,25,36,25,40,28);ctx.stroke();
     ctx.lineWidth=1.5;
     ctx.beginPath();ctx.moveTo(24,29);ctx.bezierCurveTo(28,33,36,33,40,29);ctx.stroke();
