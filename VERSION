@@ -1,4 +1,4 @@
-1.4.0
+1.9.0
 
 Changelog
 =========
@@ -7,6 +7,145 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.9.0 — 2026-10-16
+--------------------
+Terzo passo del redesign in stile cartoon: banana, esplosione e freccia di mira. Dopo
+gorilla (v1.7.0) e città/cielo/strada (v1.8.0), resta in stile neon solo l'HUD (testo
+punteggio, turno, barra potenza/angolo, indicatore vento) — prossimo e ultimo passo del
+redesign.
+
+Modificato:
+- Banana: via il gradiente radiale e il bagliore, dentro una tinta piena con contorno
+  nero, un riflesso piatto e un'ombra piatta sul lato opposto per un filo di volume senza
+  sfumature; scia di volo ora a cerchietti piatti invece che luminosi.
+- Esplosione: il nucleo centrale (prima un bagliore radiale sfumato con shadowBlur) è ora
+  una stella fumettistica a punte, piena e col grosso contorno nero, che si restringe e
+  sparisce con la stessa identica dinamica di prima (stesso raggio, stessa durata). Le tre
+  onde d'urto che si espandono attorno al punto d'impatto restano, solo con tratto più
+  marcato; i frammenti volanti sono ora cerchietti piatti con un filo di contorno invece
+  che punti luminosi.
+- Freccia di mira: via il bagliore neon sulla linea e la punta piena senza contorno,
+  dentro una linea a doppia passata (nera larga sotto, colore squadra sopra — lo stesso
+  trucco già usato per le braccia/gambe del gorilla) e una punta piena col contorno nero.
+  La scia tratteggiata della traiettoria prevista resta invariata (era già piatta).
+- Nessun cambiamento alla fisica: traiettoria, danni, raggio d'esplosione, frammenti e
+  timing restano esattamente gli stessi — cambia solo come vengono disegnati.
+
+Verificato: `node --check` per la sintassi; screenshot automatizzati (browser headless)
+in landscape e portrait con banana in volo (scia inclusa), esplosione a metà animazione
+(nucleo + onde d'urto + frammenti) e freccia di mira, nessun errore di pagina riportato.
+
+v1.8.0 — 2026-10-15
+--------------------
+Secondo passo del redesign in stile cartoon: città ed edifici, cielo e strada. Dopo i
+gorilla (v1.7.0), restano in stile neon solo la banana, l'esplosione e l'HUD — prossimo
+passo naturale.
+
+Modificato:
+- Edifici ridisegnati in piatto: via gradienti, ambient occlusion e bagliori neon su
+  facciata/fianco/tetto/finestre/insegna/antenna/ingresso. Ogni faccia è ora una tinta
+  piena (facciata/fianco/tetto come tre toni distinti, non più sfumati), le finestre hanno
+  un sottile contorno nero invece del bagliore, insegna e faro dell'antenna sono barre/punti
+  piatti, e un grosso contorno nero lega l'intera sagoma dell'edificio — stesso linguaggio
+  "contorno spesso + riempimento piatto" usato per i gorilla. Struttura isometrica
+  (facciata/fianco/tetto, finestre a griglia, terrazza sugli edifici alti) invariata.
+- Palette edifici rifatta da zero in chiave "cartoon": 6 colori pieni e saturi (teal,
+  viola, corallo, verde, ambra, azzurro) al posto dei toni quasi neri con accento neon di
+  prima.
+- Crateri: il foro resta identico (stesso meccanismo "destination-out" che scava
+  l'edificio), ma l'anello di scorza attorno è ora una tinta piatta con un sottile contorno
+  nero invece di un doppio gradiente radiale sfumato.
+- Cielo ridisegnato: via le due bande "aurora" (ciano/magenta in blend "screen") e il
+  bagliore su luna/velivolo/orizzonte; dentro un gradiente notturno più caldo (viola/indaco)
+  e qualche nuvola piatta col contorno, nello stesso stile degli edifici. Luna e velivolo
+  restano (stesso movimento/lampeggio di v1.3.0) ma piatti, senza più alone luminoso.
+  Rimossa la linea di bagliore neon sopra la strada (era puramente decorativa).
+- Strada: via il bagliore sul bordo e i riflessi "bagnati" sfumati per edificio, dentro un
+  confine netto col contorno nero.
+
+Verificato: `node --check` per la sintassi; screenshot automatizzati (browser headless) in
+landscape e portrait, incluso un test che forza due crateri su edifici diversi e ne
+ricostruisce lo sprite per controllare che il buco e l'anello restino leggibili nel nuovo
+stile. Nessuna funzione di fisica/collisione toccata in questo giro (solo le funzioni di
+disegno `renderBuilding`, `drawBg`, `drawRoad` e lo scorch-ring su canvas principale):
+confermato visivamente che un cratere forzato continua a scavare correttamente l'edificio
+giusto. HUD (testo, barra del vento, indicatore mira) non ancora toccato — resta nello
+stile neon, è il prossimo passo insieme a banana ed esplosione.
+
+v1.7.0 — 2026-10-15
+--------------------
+Primo passo del redesign in stile cartoon richiesto dall'utente ("la grafica neon un po'
+stufa... e se la facessimo in stile cartoon?"): solo i gorilla in questo giro, città/cielo/
+effetti restano nello stile neon di v1.3.0 e verranno affrontati in un prossimo passaggio.
+
+Modificato:
+- Gorilla ridisegnati in stile "cartoon": via il corpo scuro col sottile bordo neon (v1.3.0),
+  dentro un pelo a tinta piena e satura nel colore squadra con un grosso contorno nero su
+  ogni sagoma — il classico "contorno spesso + riempimento piatto" da fumetto, senza più
+  alcun bagliore/glow. Occhi molto più grandi e bianchi con pupilla nera piena e un riflesso
+  fisso, al posto del vecchio puntino colorato luminoso. Muso crema caldo semplificato in
+  un'unica forma (prima erano due ellissi sovrapposte). Un solo riflesso piatto (nessun
+  gradiente) su testa e busto per dare un minimo di volume. Stesse identiche pose di mira,
+  lancio ed esultanza, stesse coordinate della sagoma usate dalla fisica (bounding box
+  GW/GH e hitbox ellittica invariate): cambia solo come viene disegnato il gorilla, non la
+  sua forma, il suo ingombro o il gameplay.
+
+Verificato: `node --check` per la sintassi; screenshot automatizzati (browser headless) di
+entrambi i colori squadra, in tutte e tre le pose (mira, lancio, esultanza) e in entrambi gli
+orientamenti (landscape e portrait) — leggibili anche in portrait su schermo piccolo. Nessuna
+costante di fisica/hitbox toccata (GW, GH, GOR_HIT_RX, GOR_HIT_RY invariate); nessun'altra
+schermata o logica di gioco toccata in questo giro.
+
+v1.6.0 — 2026-10-15
+--------------------
+Mira libera a 360°, su segnalazione dell'utente ("il movimento delle frecce di puntamento
+è ancora limitato, non è a 360 gradi").
+
+Modificato:
+- La freccia di mira ora segue il puntatore/dito lungo l'intero cerchio attorno al gorilla,
+  non più solo sul semicerchio superiore frontale (prima circa 2°-178°). È ora possibile
+  mirare anche sotto l'orizzonte e alle proprie spalle, non solo in avanti e verso l'alto.
+  In pratica si può anche colpire il proprio edificio o se stessi mirando verso il basso,
+  con lo stesso meccanismo di "suicidio" già esistente per il danno collaterale da crollo —
+  nessuna nuova regola, solo più libertà nella direzione del lancio.
+- L'intelligenza artificiale (giocatore 2 in modalità vs AI) non è stata toccata: continua
+  a mirare come prima, solo il giocatore umano ha ora la mira completa.
+
+Verificato: `node --check` per la sintassi; un test automatico (Node + jsdom) che confronta,
+per entrambi i giocatori e lungo le 8 direzioni cardinali/diagonali attorno al gorilla,
+l'angolo calcolato dal puntatore con la velocità di lancio che ne risulta — tutte e 16 le
+combinazioni risultano allineate esattamente alla direzione del puntatore (nessun
+ripiegamento residuo). Verificato anche un tiro verticale completo verso il basso dall'inizio
+alla fine (step fisici, collisione, esplosione) senza eccezioni. Controllato con screenshot
+automatizzati (browser headless) che mirando sotto e alle spalle del proprio gorilla la
+freccia segua davvero il puntatore, e che un tiro deliberatamente mirato ai propri piedi
+risolva la partita correttamente assegnando il punto all'avversario ("P1 SUICIDIO!").
+Rieseguiti i test precedenti (hitbox, danno collaterale, tunneling, audio, sistema a match):
+tutti ancora validi, dato che questo giro tocca solo il calcolo dell'angolo di mira del
+giocatore umano.
+
+v1.5.0 — 2026-10-15
+--------------------
+Marchio "GPverse" sul gioco, su richiesta esplicita dell'utente.
+
+Aggiunto:
+- Splash screen con il logo GPverse (immagine fornita dall'utente, incorporata come
+  data URI JPEG — nessun file esterno da ospitare, resta un unico index.html
+  autosufficiente) all'apertura del gioco, prima del menu principale. Sparisce da sola
+  dopo circa 2 secondi, oppure subito al tocco/click. Compare una sola volta per
+  apertura dell'app (non ad ogni ritorno al menu durante la stessa sessione, dato che
+  tutte le altre schermate cambiano senza ricaricare la pagina).
+- L'immagine è stata ridimensionata e ricompressa (da 1408×768/78KB a 820×447/28KB)
+  per tenere leggero il file, mantenendo nitidezza piena alla dimensione a cui viene
+  mostrata; il colore di sfondo dello splash (`#070712`, lo stesso usato nel resto del
+  gioco) corrisponde a quello dell'immagine originale, così non si vede alcuna cornice.
+
+Verificato: `node --check` per la sintassi; screenshot automatizzati (browser headless)
+in landscape e portrait che confermano la dissolvenza automatica e al tocco, e che il
+menu principale sottostante torna interattivo (i pulsanti non restano "coperti"
+dall'overlay una volta nascosto). Nessun'altra schermata o logica di gioco toccata in
+questo giro.
 
 v1.4.0 — 2026-09-25
 --------------------
