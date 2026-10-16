@@ -133,7 +133,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.10.1';
+const VERSION='1.11.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -698,29 +698,31 @@ function drawBg(){
 
 function drawWindHUD(){
   if(!state) return;
+  // Barra del vento "adesiva": via la capsula con bordo a bagliore e la
+  // barra di riempimento sfumata, dentro un contorno nero netto e una
+  // tinta piatta per il riempimento — ultimo pezzo rimasto del redesign
+  // cartoon (il resto dell'HUD è passato nello stesso giro, vedi drawHUD).
   const w=state.wind,aw=Math.abs(w),gr=w>=0,wc=gr?C.p1:C.p2;
   const str=Math.min(aw/10,1);
   const cy2=CH*.17+Math.sin(state.t*1.7)*2.5;
   ctx.save(); ctx.translate(CW/2,cy2);
   const pw=190,ph=28;
-  ctx.fillStyle='rgba(2,8,20,.78)';
+  ctx.fillStyle='rgba(26,17,48,.88)';
   ctx.beginPath(); ctx.roundRect(-pw/2,-ph/2,pw,ph,ph/2); ctx.fill();
-  ctx.strokeStyle=wc+'44'; ctx.lineWidth=1; ctx.stroke();
+  ctx.strokeStyle=HUD_INK; ctx.lineWidth=2; ctx.stroke();
   const tw=120,fw=str*tw;
-  ctx.fillStyle='rgba(255,255,255,.03)';
+  ctx.fillStyle='rgba(255,255,255,.08)';
   ctx.beginPath(); ctx.roundRect(-tw/2,-3,tw,6,3); ctx.fill();
-  const fg2=ctx.createLinearGradient(-tw/2,0,tw/2,0);
-  fg2.addColorStop(0,wc+'18'); fg2.addColorStop(gr?1:0,wc);
-  ctx.fillStyle=fg2;
+  ctx.fillStyle=wc;
   if(gr){ctx.beginPath();ctx.roundRect(-tw/2,-3,fw,6,3);ctx.fill();}
   else{ctx.beginPath();ctx.roundRect(tw/2-fw,-3,fw,6,3);ctx.fill();}
   const ax=gr?-tw/2+fw+Math.sin(state.t*5)*2.5*str:tw/2-fw-Math.sin(state.t*5)*2.5*str;
   const ad=gr?1:-1;
-  ctx.fillStyle=wc; ctx.shadowColor=wc; ctx.shadowBlur=10;
-  ctx.beginPath(); ctx.moveTo(ax,0); ctx.lineTo(ax-ad*10,-6); ctx.lineTo(ax-ad*10,6); ctx.closePath(); ctx.fill(); ctx.shadowBlur=0;
-  ctx.fillStyle=wc; ctx.font='bold 9px "Share Tech Mono",monospace'; ctx.textAlign='right';
-  ctx.fillText(`${gr?'→':'←'} ${aw.toFixed(1)}`,pw/2-10,3.5);
-  ctx.fillStyle='#253545'; ctx.font='7px "Share Tech Mono",monospace'; ctx.textAlign='left';
+  const arrow=()=>{ctx.beginPath(); ctx.moveTo(ax,0); ctx.lineTo(ax-ad*10,-6); ctx.lineTo(ax-ad*10,6); ctx.closePath();};
+  arrow(); ctx.fillStyle=wc; ctx.fill();
+  ctx.strokeStyle=HUD_INK; ctx.lineWidth=1.4; arrow(); ctx.stroke();
+  stickerText(`${gr?'→':'←'} ${aw.toFixed(1)}`,pw/2-10,3.5,wc,'bold 9px "Share Tech Mono",monospace','right');
+  ctx.fillStyle='#8a7aa8'; ctx.font='7px "Share Tech Mono",monospace'; ctx.textAlign='left';
   ctx.fillText('WIND',-pw/2+10,-ph/2-3);
   ctx.restore();
 }
@@ -1121,25 +1123,43 @@ function lerpCol(a,b,t){
     return Math.round(av+(bv-av)*t).toString(16).padStart(2,'0');
   }).join('');
 }
+// Testo "adesivo": contorno nero spesso + riempimento piatto sopra, lo
+// stesso linguaggio "flat fill + ink outline" già usato ovunque nel gioco —
+// sostituisce il vecchio testo con ombra colorata/shadowBlur neon dell'HUD.
+const HUD_INK='#140d08';
+function stickerText(txt,x,y,fill,font,align){
+  ctx.font=font; ctx.textAlign=align||'left';
+  ctx.lineJoin='round'; ctx.strokeStyle=HUD_INK;
+  // BUG risolto: `parseInt(font,10)` leggeva il PRIMO numero della stringa
+  // del font, che per i font con un peso numerico (es. `900 15px "Orbitron"`)
+  // è il peso (900) e non la dimensione — il contorno diventava enorme
+  // (900*.16≈144px) e produceva una macchia nera che copriva mezzo schermo
+  // sugli angoli del punteggio. Ora si estrae specificamente il numero
+  // seguito da "px" dalla stringa del font.
+  const sizeMatch=font.match(/(\d+(?:\.\d+)?)px/);
+  const sizePx=sizeMatch?parseFloat(sizeMatch[1]):20;
+  ctx.lineWidth=Math.max(2,sizePx*.16);
+  ctx.strokeText(txt,x,y);
+  ctx.fillStyle=fill; ctx.fillText(txt,x,y);
+}
 function drawHUD(){
+  // HUD "adesivo": via il pannello sfumato e ogni testo/bordo con
+  // shadowBlur neon, dentro un pannello a tinta piatta con un confine nero
+  // netto e testo "sticker" (contorno nero + riempimento piatto) — ultimo
+  // pezzo del redesign cartoon, stesso linguaggio di gorilla/città/effetti.
   const HH=52;
-  const hg=ctx.createLinearGradient(0,0,0,HH);
-  hg.addColorStop(0,'rgba(1,4,16,.96)'); hg.addColorStop(1,'rgba(2,10,28,.86)');
-  ctx.fillStyle=hg; ctx.fillRect(0,0,CW,HH);
-  ctx.strokeStyle='rgba(0,200,160,.25)'; ctx.lineWidth=1; ctx.shadowColor='#00f5c8'; ctx.shadowBlur=4;
-  ctx.beginPath(); ctx.moveTo(0,HH); ctx.lineTo(CW,HH); ctx.stroke(); ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(26,17,48,.92)'; ctx.fillRect(0,0,CW,HH);
+  ctx.strokeStyle=HUD_INK; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(0,HH-1); ctx.lineTo(CW,HH-1); ctx.stroke();
   const fs=Math.max(11,CW*.017);
-  ctx.font=`900 ${fs}px "Orbitron",sans-serif`;
-  ctx.fillStyle=C.p1; ctx.shadowColor=C.p1; ctx.shadowBlur=10;
-  ctx.fillText(`P1  ${scores[0]}`,12,22); ctx.shadowBlur=0;
-  ctx.fillStyle=C.p2; ctx.shadowColor=C.p2; ctx.shadowBlur=10; ctx.textAlign='right';
-  ctx.fillText(`${scores[1]}  ${mode==='vsAI'?'AI':'P2'}`,CW-12,22); ctx.shadowBlur=0; ctx.textAlign='left';
+  const font1=`900 ${fs}px "Orbitron",sans-serif`;
+  stickerText(`P1  ${scores[0]}`,12,22,C.p1,font1,'left');
+  stickerText(`${scores[1]}  ${mode==='vsAI'?'AI':'P2'}`,CW-12,22,C.p2,font1,'right');
   const tc=state.turn===0?C.p1:C.p2;
   const tn=mode==='vsAI'&&state.turn===1?'AI':`P${state.turn+1}`;
   const lbl={flying:'● IN VOLO',exploding:'✦ BOOM',celebrating:'★ VITTORIA',done:''}[state.phase]||`▸ ${tn} MIRA`;
-  ctx.font=`bold ${Math.max(10,CW*.014)}px "Share Tech Mono",monospace`;
-  ctx.fillStyle=tc; ctx.shadowColor=tc; ctx.shadowBlur=14; ctx.textAlign='center';
-  ctx.fillText(lbl,CW/2,22); ctx.shadowBlur=0; ctx.textAlign='left';
+  const font2=`bold ${Math.max(10,CW*.014)}px "Share Tech Mono",monospace`;
+  stickerText(lbl,CW/2,22,tc,font2,'center');
   if(state.phase==='aiming'&&!(mode==='vsAI'&&state.turn===1)){
     const pwr=curPower(),isCharging=!!drag;
     ctx.fillStyle='#2a3d4f'; ctx.font='7px "Share Tech Mono",monospace'; ctx.textAlign='right';
@@ -1151,21 +1171,20 @@ function drawHUD(){
       const fx=bx+s*(bw/segs)+1,fw2=bw/segs-2;
       if(s<fs2){
         const t=s/segs;
-        const sc=t<.5?lerpCol('#00f5c8','#ffd000',t*2):lerpCol('#ffd000','#ff2d6f',(t-.5)*2);
-        const pulse=isCharging?.6+.4*Math.sin(state.t*11+s*.35):1;
-        ctx.fillStyle=sc; ctx.globalAlpha=pulse; ctx.shadowColor=sc; ctx.shadowBlur=6;
-        ctx.fillRect(fx,by+1,fw2,bh-2); ctx.shadowBlur=0; ctx.globalAlpha=1;
+        const sc=t<.5?lerpCol('#00d4ac','#ffd000',t*2):lerpCol('#ffd000','#ff2d6f',(t-.5)*2);
+        // pulsazione piatta (sola opacità, niente più bagliore) mentre si carica
+        const pulse=isCharging?.7+.3*Math.sin(state.t*11+s*.35):1;
+        ctx.globalAlpha=pulse; ctx.fillStyle=sc;
+        ctx.fillRect(fx,by+1,fw2,bh-2);
+        ctx.globalAlpha=1; ctx.strokeStyle=HUD_INK; ctx.lineWidth=1;
+        ctx.strokeRect(fx,by+1,fw2,bh-2);
       } else {
         ctx.fillStyle='rgba(255,255,255,.03)'; ctx.fillRect(fx,by+1,fw2,bh-2);
       }
     }
-    if(isCharging){
-      ctx.shadowColor=C.banana; ctx.shadowBlur=14*(.35+.65*Math.abs(Math.sin(state.t*9)));
-      ctx.strokeStyle=C.banana+'aa'; ctx.lineWidth=1.5;
-    } else {
-      ctx.strokeStyle='rgba(0,180,140,.25)'; ctx.lineWidth=1;
-    }
-    ctx.strokeRect(bx,by,bw,bh); ctx.shadowBlur=0;
+    // cornice piatta: colore banana più spessa mentre si carica, nessun bagliore
+    ctx.strokeStyle=isCharging?C.banana:HUD_INK; ctx.lineWidth=isCharging?2.4:1.8;
+    ctx.strokeRect(bx,by,bw,bh);
     ctx.fillStyle='rgba(255,255,255,.28)'; ctx.font='bold 7px "Share Tech Mono",monospace';
     ctx.fillText('PWR',bx+4,by+bh-2);
     ctx.textAlign='right'; ctx.fillText(`${Math.round(pwr)}%`,bx+bw-4,by+bh-2); ctx.textAlign='left';
