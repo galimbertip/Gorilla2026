@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png">
 <link rel="apple-touch-icon" sizes="167x167" href="icons/icon-167.png">
 <link rel="apple-touch-icon" sizes="120x120" href="icons/icon-120.png">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&family=Bangers&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Share Tech Mono',monospace}
@@ -133,7 +133,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.9.0';
+const VERSION='1.10.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -475,9 +475,21 @@ function hitGorilla(pos,gors,shooter,banana){
 }
 
 function blastBuilding(b,cx,cy,r){
+  // BUG: la soglia di fusione confrontava la distanza dal nuovo impatto solo
+  // col raggio del cratere ESISTENTE (cr.r*1.4), ignorando il raggio del
+  // nuovo colpo (r). Con EXPL_R~36px (landscape) la soglia iniziale era di
+  // appena ~50px: due colpi diretti sulla stessa parete di un edificio, ma
+  // non esattamente nello stesso punto (es. da due gorilla diversi, con
+  // traiettorie diverse), restavano facilmente sopra quella distanza e
+  // finivano per creare un secondo cratere separato invece di allargare
+  // quello già presente — come se il primo non esistesse. Ora la soglia
+  // considera la somma dei due raggi (il punto in cui i due fori si
+  // toccherebbero visivamente) con un margine, così due impatti che
+  // ricadono sulla stessa zona dell'edificio si fondono sempre in un unico
+  // cratere via via più grande, chiunque li abbia sparati.
   let merged=false;
   for(const cr of b.craters){
-    if(Math.hypot(cx-cr.cx,cy-cr.cy)<cr.r*1.4){
+    if(Math.hypot(cx-cr.cx,cy-cr.cy)<(cr.r+r)*1.25){
       const nr=Math.min(cr.r+r*.5,r*4);
       cr.cx=(cr.cx*cr.r+cx*r)/(cr.r+r);
       cr.cy=(cr.cy*cr.r+cy*r)/(cr.r+r);
@@ -554,13 +566,23 @@ function doFire(angle,power){
   playThrow();
 }
 
+// Onomatopee fumettistiche: un colpo diretto su un gorilla usa parole da
+// "pugno" (POW/BAM/WHAP...), un impatto su edificio/strada usa parole da
+// "botto" (BOOM/KABOOM/CRASH...) — pescate a caso ad ogni esplosione.
+const HIT_WORDS=['POW!','BAM!','WHAP!','SMACK!'];
+const BOOM_WORDS=['BOOM!','KABOOM!','CRASH!','BLAM!'];
 function triggerExplosion(x,y,killed){
   state.phase='exploding';state.banana=null;state.throwAnim=false;
   state.expParts=Array.from({length:34},()=>({
     x,y,vx:rnd(-1.8,1.8),vy:rnd(-2.8,.5),r:rnd(2,8),
     col:[C.expl,C.banana,'#ff2200','#ffaa00','#fff'][Math.floor(Math.random()*5)]
   }));
-  state.explosion={x,y,t0:state.t,dur:1.1,killed};
+  const words=killed!==-1?HIT_WORDS:BOOM_WORDS;
+  const word=words[Math.floor(Math.random()*words.length)];
+  // Linee d'urto: generate una sola volta qui (non ad ogni frame) così il
+  // raggio resta stabile invece di "tremare" durante l'animazione.
+  const burstLines=Array.from({length:14},()=>({angle:rnd(0,TAU),len:rnd(.7,1.4)}));
+  state.explosion={x,y,t0:state.t,dur:1.1,killed,word,wordRot:rnd(-.14,.14),burstLines};
   playExplosion(killed!==-1);
   vibrate(killed!==-1?[40,30,60]:[35]);
 }
@@ -730,15 +752,19 @@ function drawRoad(){
 
 // ─── DRAW: GORILLA ────────────────────────────────────────────
 function drawGorilla(g,player,celebrating,throwing,bp){
-  // Stile "cartoon": via il corpo scuro col bordo neon (v1.3.0), dentro un
-  // pelo a tinta piatta nel colore squadra con un grosso contorno nero pieno
-  // su ogni sagoma (il classico "outline + flat fill" da fumetto), muso/palmi
-  // in un tono crema caldo condiviso, un'unica macchia più scura dello stesso
-  // colore per dare un minimo di volume senza gradienti — niente più
-  // shadowBlur/glow da nessuna parte sul gorilla. Stesse identiche pose di
-  // mira/lancio/esultanza e stesse coordinate della sagoma usate dalla
-  // fisica (bounding box GW/GH e hitbox ellittica invariate): cambia solo
-  // come viene disegnato, non la sua forma o il suo ingombro.
+  // Stile "cartoon spinto": stessa impostazione "contorno pieno + riempimento
+  // piatto" di v1.7.0, ma esagerata su richiesta esplicita dell'utente
+  // ("voglio renderlo più fumettoso spinto") — contorni più spessi ovunque,
+  // testa/mani/piedi ingranditi rispetto al corpo (proporzioni da "super
+  // deformed"), sopracciglia più marcate e aguzze. La testa e tutti i suoi
+  // dettagli (muso, naso, occhi, orecchie, ciuffo, sopracciglia, bocca)
+  // vengono disegnati dentro una trasformazione locale che li ingrandisce
+  // attorno al centro della testa stessa (HX,HY) — nessuna coordinata dei
+  // singoli dettagli è stata toccata, solo la scala attorno al perno.
+  // Stesse identiche pose di mira/lancio/esultanza e stesse coordinate della
+  // sagoma usate dalla fisica (bounding box GW/GH e hitbox ellittica
+  // invariate): cambia solo come viene disegnato, non la sua forma, il suo
+  // ingombro o il gameplay.
   const col=player===0?C.p1:C.p2;      // pelo: colore pieno e saturo della squadra
   const dk=shade(col,.6);              // stessa tinta, più scura: accenti/ombra piatta
   const skin='#ffdfb0';                // muso/palmi/piante: crema caldo, condiviso
@@ -749,16 +775,17 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   // riempimento piatto, nessun contorno: per i dettagli piccoli (naso, pupille, denti...)
   const F=(fn,c)=>{ctx.fillStyle=c;ctx.beginPath();fn();ctx.fill();};
   // riempimento piatto + grosso contorno nero: per le sagome principali
-  // (testa, busto, orecchie, mani/piedi, muso)
+  // (testa, busto, orecchie, mani/piedi, muso) — contorno più spesso di v1.7.0
   const E=(fn,c,lw)=>{
     ctx.fillStyle=c; ctx.beginPath(); fn(); ctx.fill();
-    ctx.strokeStyle=INK; ctx.lineWidth=lw||2.4;
+    ctx.strokeStyle=INK; ctx.lineWidth=lw||3.6;
     ctx.beginPath(); fn(); ctx.stroke();
   };
   // arto (braccio/gamba): passata nera larga sotto + passata del colore
-  // squadra sopra, stesso effetto "contorno pieno" di un arto disegnato a mano
+  // squadra sopra, stesso effetto "contorno pieno" di un arto disegnato a
+  // mano — alone nero ancora più largo di v1.7.0 per un tratto più marcato
   const L=(fn,w)=>{
-    ctx.strokeStyle=INK; ctx.lineWidth=w+3.4;
+    ctx.strokeStyle=INK; ctx.lineWidth=w+5.6;
     ctx.beginPath(); fn(); ctx.stroke();
     ctx.strokeStyle=col; ctx.lineWidth=w;
     ctx.beginPath(); fn(); ctx.stroke();
@@ -766,9 +793,10 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   // legs
   L(()=>{ctx.moveTo(21,63);ctx.quadraticCurveTo(11,74,7,83);},14);
   L(()=>{ctx.moveTo(43,63);ctx.quadraticCurveTo(53,74,57,83);},14);
-  E(()=>{ctx.ellipse(7,83,11,5,-.2,0,TAU);},col);
-  E(()=>{ctx.ellipse(57,83,11,5,.2,0,TAU);},col);
-  [-3,0,3].forEach(d=>{F(()=>{ctx.arc(4+d,81,1.6,0,TAU);},dk);F(()=>{ctx.arc(54+d,81,1.6,0,TAU);},dk);});
+  // piedi ingranditi (prima rx,ry 11,5) per mani/piedi più "da fumetto"
+  E(()=>{ctx.ellipse(7,83,13.5,6.5,-.2,0,TAU);},col);
+  E(()=>{ctx.ellipse(57,83,13.5,6.5,.2,0,TAU);},col);
+  [-3,0,3].forEach(d=>{F(()=>{ctx.arc(4+d,81,1.9,0,TAU);},dk);F(()=>{ctx.arc(54+d,81,1.9,0,TAU);},dk);});
   // torso — spalle larghe e petto pieno
   const torso=()=>{ctx.moveTo(6,73);ctx.bezierCurveTo(-2,50,-1,26,9,16);ctx.bezierCurveTo(18,7,46,7,55,16);ctx.bezierCurveTo(65,26,66,50,58,73);ctx.closePath();};
   E(torso,col);
@@ -780,30 +808,36 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   F(()=>{ctx.ellipse(23,38,11,8,-.1,0,TAU);},dk+'55');
   F(()=>{ctx.ellipse(43,38,11,8,.1,0,TAU);},dk+'55');
   // emblema sul petto: distintivo piatto scuro con contorno nero + riflesso
-  E(()=>{ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45);ctx.bezierCurveTo(19,52,26,58,32,63);ctx.bezierCurveTo(38,58,45,52,45,45);ctx.bezierCurveTo(45,38,40,32,32,32);ctx.closePath();},dk,1.6);
+  E(()=>{ctx.moveTo(32,32);ctx.bezierCurveTo(24,32,19,38,19,45);ctx.bezierCurveTo(19,52,26,58,32,63);ctx.bezierCurveTo(38,58,45,52,45,45);ctx.bezierCurveTo(45,38,40,32,32,32);ctx.closePath();},dk,2.4);
   F(()=>{ctx.moveTo(32,34);ctx.bezierCurveTo(27,34,23,39,23,45);ctx.lineTo(27,45);ctx.bezierCurveTo(27,41,29,38,32,37);ctx.closePath();},'rgba(255,255,255,.35)');
-  // arms
+  // arms — mani ingrandite (prima raggio 8/5) per restare in scala coi piedi
   if(throwing){
     L(()=>{ctx.moveTo(11,25);ctx.bezierCurveTo(-4,13,-10,3,-14,-4);},14);
     L(()=>{ctx.moveTo(53,25);ctx.bezierCurveTo(66,38,72,53,74,61);},14);
-    E(()=>{ctx.arc(-14,-4,8,0,TAU);},col);F(()=>{ctx.arc(-14,-4,5,0,TAU);},skin);
+    E(()=>{ctx.arc(-14,-4,9.5,0,TAU);},col);F(()=>{ctx.arc(-14,-4,6.2,0,TAU);},skin);
   } else if(celebrating){
     const sp=1-bp;
     const lx=11-sp*20,ly=25+sp*6,lfx=lx-sp*18,lfy=ly-sp*12;
     const rx=53+sp*20,ry=25+sp*6,rfx=rx+sp*16,rfy=ry-sp*10;
     L(()=>{ctx.moveTo(11,25);ctx.quadraticCurveTo(lx,ly,lfx,lfy);},14);
     L(()=>{ctx.moveTo(53,25);ctx.quadraticCurveTo(rx,ry,rfx,rfy);},14);
-    E(()=>{ctx.arc(lfx,lfy,8,0,TAU);},col);E(()=>{ctx.arc(rfx,rfy,8,0,TAU);},col);
-    F(()=>{ctx.arc(lfx,lfy,5,0,TAU);},skin);F(()=>{ctx.arc(rfx,rfy,5,0,TAU);},skin);
+    E(()=>{ctx.arc(lfx,lfy,9.5,0,TAU);},col);E(()=>{ctx.arc(rfx,rfy,9.5,0,TAU);},col);
+    F(()=>{ctx.arc(lfx,lfy,6.2,0,TAU);},skin);F(()=>{ctx.arc(rfx,rfy,6.2,0,TAU);},skin);
   } else {
     L(()=>{ctx.moveTo(11,25);ctx.bezierCurveTo(0,42,-3,58,0,69);},14);
     L(()=>{ctx.moveTo(53,25);ctx.bezierCurveTo(64,42,67,58,64,69);},14);
-    E(()=>{ctx.arc(0,69,8,0,TAU);},col);E(()=>{ctx.arc(64,69,8,0,TAU);},col);
-    F(()=>{ctx.arc(0,69,5,0,TAU);},skin);F(()=>{ctx.arc(64,69,5,0,TAU);},skin);
-    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(-3+d,67,2,0,TAU);},dk);F(()=>{ctx.arc(61+d,67,2,0,TAU);},dk);});
+    E(()=>{ctx.arc(0,69,9.5,0,TAU);},col);E(()=>{ctx.arc(64,69,9.5,0,TAU);},col);
+    F(()=>{ctx.arc(0,69,6.2,0,TAU);},skin);F(()=>{ctx.arc(64,69,6.2,0,TAU);},skin);
+    [-3,0,3].forEach(d=>{F(()=>{ctx.arc(-3+d,67,2.3,0,TAU);},dk);F(()=>{ctx.arc(61+d,67,2.3,0,TAU);},dk);});
   }
   // neck
   F(()=>{ctx.moveTo(22,18);ctx.lineTo(42,18);ctx.lineTo(40,10);ctx.lineTo(24,10);ctx.closePath();},dk);
+  // ═══ TESTA: tutto il gruppo testa/muso/occhi/orecchie/ciuffo/sopracciglia
+  // viene disegnato dentro una trasformazione locale che lo ingrandisce
+  // attorno al proprio centro (HX,HY) — proporzioni "da fumetto" con testa
+  // volutamente più grande del corpo, nessuna coordinata interna toccata.
+  const HX=32,HY=10,HS=1.32;
+  ctx.save(); ctx.translate(HX,HY); ctx.scale(HS,HS); ctx.translate(-HX,-HY);
   // head
   E(()=>{ctx.ellipse(32,10,19,15,0,0,TAU);},col);
   // riflesso piatto sulla testa, stesso trucco del busto
@@ -811,9 +845,10 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   F(()=>{ctx.ellipse(24,3,9,7,-.2,0,TAU);},'rgba(255,255,255,.22)');
   ctx.restore();
   // crest — ciuffo piatto più scuro in cima alla testa, con contorno
-  E(()=>{ctx.moveTo(22,1);ctx.bezierCurveTo(24,-6,40,-6,42,1);ctx.bezierCurveTo(44,6,40,8,32,8);ctx.bezierCurveTo(24,8,20,6,22,1);ctx.closePath();},dk,1.6);
-  // brow — cresta sopraccigliare scura e pronunciata
-  F(()=>{ctx.moveTo(12,11);ctx.bezierCurveTo(17,3,47,3,52,11);ctx.lineTo(52,17);ctx.lineTo(12,17);ctx.closePath();},dk);
+  E(()=>{ctx.moveTo(22,1);ctx.bezierCurveTo(24,-6,40,-6,42,1);ctx.bezierCurveTo(44,6,40,8,32,8);ctx.bezierCurveTo(24,8,20,6,22,1);ctx.closePath();},dk,2.4);
+  // brow — sopracciglia più aguzze e "corrucciate", espressione più marcata
+  // da fumetto d'azione (prima un arco morbido, ora un picco più deciso)
+  F(()=>{ctx.moveTo(12,11);ctx.bezierCurveTo(15,-1,49,-1,52,11);ctx.lineTo(52,17);ctx.lineTo(12,17);ctx.closePath();},dk);
   // ears — esterno piatto nel colore squadra, interno piatto più scuro
   E(()=>{ctx.arc(13,10,7.5,0,TAU);},col);E(()=>{ctx.arc(51,10,7.5,0,TAU);},col);
   F(()=>{ctx.arc(13,10,3.4,0,TAU);},dk);F(()=>{ctx.arc(51,10,3.4,0,TAU);},dk);
@@ -822,12 +857,12 @@ function drawGorilla(g,player,celebrating,throwing,bp){
   // nose
   F(()=>{ctx.ellipse(25,19,4,3,-.3,0,TAU);},dk);F(()=>{ctx.ellipse(39,19,4,3,.3,0,TAU);},dk);
   F(()=>{ctx.ellipse(25,20,2.2,1.6,-.3,0,TAU);},'#111');F(()=>{ctx.ellipse(39,20,2.2,1.6,.3,0,TAU);},'#111');
-  // eyes — grandi e bianchi: pupilla nera piena e un riflesso bianco fisso,
-  // il tocco più "cartoon" al posto del vecchio puntino colorato luminoso
-  F(()=>{ctx.arc(21,12,6.6,0,TAU);},INK);F(()=>{ctx.arc(43,12,6.6,0,TAU);},INK);
-  F(()=>{ctx.arc(21,12,4.6,0,TAU);},'#fff');F(()=>{ctx.arc(43,12,4.6,0,TAU);},'#fff');
-  F(()=>{ctx.arc(21,12,2.7,0,TAU);},INK);F(()=>{ctx.arc(43,12,2.7,0,TAU);},INK);
-  F(()=>{ctx.arc(22.4,10.6,1.1,0,TAU);},'#fff');F(()=>{ctx.arc(44.4,10.6,1.1,0,TAU);},'#fff');
+  // eyes — grandi e bianchi, ancora più grandi di v1.7.0: pupilla nera piena
+  // e un riflesso bianco fisso, il tocco più "cartoon spinto" richiesto
+  F(()=>{ctx.arc(21,12,7.4,0,TAU);},INK);F(()=>{ctx.arc(43,12,7.4,0,TAU);},INK);
+  F(()=>{ctx.arc(21,12,5.3,0,TAU);},'#fff');F(()=>{ctx.arc(43,12,5.3,0,TAU);},'#fff');
+  F(()=>{ctx.arc(21,12,3.1,0,TAU);},INK);F(()=>{ctx.arc(43,12,3.1,0,TAU);},INK);
+  F(()=>{ctx.arc(22.4,10.6,1.3,0,TAU);},'#fff');F(()=>{ctx.arc(44.4,10.6,1.3,0,TAU);},'#fff');
   // mouth
   if(celebrating){
     F(()=>{ctx.ellipse(32,28,8,6,0,0,TAU);},'#600000');
@@ -835,18 +870,19 @@ function drawGorilla(g,player,celebrating,throwing,bp){
     [27,31,35].forEach(tx=>F(()=>{ctx.rect(tx,28,3,3.5);},'#ffe0c0'));
     F(()=>{ctx.ellipse(32,32,4,3.5,0,0,TAU);},'#bb2233');
   } else {
-    ctx.strokeStyle=INK;ctx.lineWidth=2;
+    ctx.strokeStyle=INK;ctx.lineWidth=2.6;
     ctx.beginPath();ctx.moveTo(24,28);ctx.bezierCurveTo(28,25,36,25,40,28);ctx.stroke();
-    ctx.lineWidth=1.5;
+    ctx.lineWidth=1.9;
     ctx.beginPath();ctx.moveTo(24,29);ctx.bezierCurveTo(28,33,36,33,40,29);ctx.stroke();
   }
+  ctx.restore(); // fine trasformazione testa
   ctx.restore();
 }
 
 // ─── DRAW: BANANA ─────────────────────────────────────────────
 function drawBanana(){
   if(!state.banana) return;
-  const{pos,spin,trail}=state.banana;
+  const{pos,spin,trail,vel}=state.banana;
   const INK='#17100a';
   // Scia piatta: cerchietti via via più piccoli/trasparenti verso il passato,
   // senza più bagliore — stesso senso di velocità, stile "flat" come il resto.
@@ -859,6 +895,26 @@ function drawBanana(){
       ctx.beginPath(); ctx.arc(tp.x,tp.y,2.2*a+1,0,TAU); ctx.fill();
       ctx.restore();
     });
+  }
+  // Linee cinetiche: un ventaglio di tratti neri dritti nella direzione
+  // opposta al moto, il classico linguaggio "a tutta velocità" da fumetto
+  // d'azione — in aggiunta alla scia già presente, non al suo posto.
+  if(vel){
+    const spd=Math.hypot(vel.x,vel.y);
+    if(spd>35){
+      const dirx=-vel.x/spd,diry=-vel.y/spd,perpx=-diry,perpy=dirx;
+      ctx.save(); ctx.strokeStyle=INK; ctx.lineCap='round'; ctx.lineWidth=2;
+      [-7,0,7].forEach((off,i)=>{
+        const len=14+(i%2)*5;
+        const sx=pos.x+perpx*off,sy=pos.y+perpy*off;
+        ctx.globalAlpha=.4;
+        ctx.beginPath();
+        ctx.moveTo(sx+dirx*9,sy+diry*9);
+        ctx.lineTo(sx+dirx*(9+len),sy+diry*(9+len));
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
   }
   ctx.save(); ctx.translate(pos.x,pos.y); ctx.rotate(spin);
   // Banana = thick curved crescent arc, ora a tinta piatta + contorno nero
@@ -918,6 +974,22 @@ function drawExplosion(){
     ctx.beginPath(); ctx.arc(ex.x,ex.y,EXPL_R*rp*(1+i*.6),0,TAU); ctx.stroke();
   });
   ctx.globalAlpha=1; ctx.restore();
+  // Linee d'urto: raggi dritti che scattano fuori dal centro nei primissimi
+  // istanti e svaniscono subito — il classico "impatto" da fumetto d'azione,
+  // in aggiunta alla stella del nucleo. Angoli/lunghezze generati una sola
+  // volta in triggerExplosion() così restano stabili fotogramma dopo fotogramma.
+  if(ex.burstLines&&p<.4){
+    const ba=Math.max(0,1-p/.4),r1=EXPL_R*1.1,blw=Math.max(1.4,EXPL_R*.09);
+    ctx.save(); ctx.strokeStyle=INK; ctx.lineCap='round'; ctx.globalAlpha=ba*.85; ctx.lineWidth=blw;
+    ex.burstLines.forEach(bl=>{
+      const r2=r1+EXPL_R*bl.len*1.6;
+      ctx.beginPath();
+      ctx.moveTo(ex.x+Math.cos(bl.angle)*r1,ex.y+Math.sin(bl.angle)*r1);
+      ctx.lineTo(ex.x+Math.cos(bl.angle)*r2,ex.y+Math.sin(bl.angle)*r2);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
   // Nucleo: stella fumettistica a punte, piatta con grosso contorno nero, al
   // posto del vecchio bagliore radiale sfumato — stessa dinamica (piena
   // all'impatto, si restringe e sparisce seguendo ep), cambia solo lo stile,
@@ -950,6 +1022,30 @@ function drawExplosion(){
     ctx.strokeStyle=INK; ctx.lineWidth=1; ctx.stroke();
     ctx.restore();
   });
+  // Onomatopea fumettistica: "POW!"/"BOOM!" ecc. che compare di scatto
+  // sull'impatto (piccolo rimbalzo di scala) e sparisce in dissolvenza
+  // salendo leggermente, il classico "balloon" dei fumetti d'azione.
+  if(ex.word){
+    const inT=Math.min(p/.18,1);
+    const popScale=inT<1?1+Math.sin(inT*Math.PI)*.35:1;
+    const outA=p>.55?Math.max(0,1-(p-.55)/.45):1;
+    const alpha=inT*outA;
+    if(alpha>.01){
+      ctx.save();
+      ctx.translate(ex.x,ex.y-EXPL_R*.9-p*18);
+      ctx.rotate(ex.wordRot);
+      ctx.scale(popScale,popScale);
+      ctx.globalAlpha=alpha;
+      const fs=Math.max(20,CW*.05);
+      ctx.font=`${fs}px "Bangers",cursive`;
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.lineJoin='round';
+      ctx.lineWidth=fs*.17; ctx.strokeStyle=INK;
+      ctx.strokeText(ex.word,0,0);
+      ctx.fillStyle=ex.killed!==-1?'#ffd000':'#ff8c00';
+      ctx.fillText(ex.word,0,0);
+      ctx.restore();
+    }
+  }
 }
 
 // ─── DRAW: AIM GUIDE ──────────────────────────────────────────
