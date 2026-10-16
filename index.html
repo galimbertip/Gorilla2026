@@ -133,7 +133,7 @@ canvas{display:block;touch-action:none}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.8.0';
+const VERSION='1.9.0';
 const GRAV=9.8, DT=0.042, N_BLDG=9, ROAD_H=24;
 const CHARGE_CYCLE=8.0;
 // 3-D offsets — big enough to see clearly
@@ -847,42 +847,51 @@ function drawGorilla(g,player,celebrating,throwing,bp){
 function drawBanana(){
   if(!state.banana) return;
   const{pos,spin,trail}=state.banana;
-  // Scia luminosa: punti sempre più piccoli/trasparenti verso il passato,
-  // dà un senso di velocità al lancio invece della sola banana statica.
+  const INK='#17100a';
+  // Scia piatta: cerchietti via via più piccoli/trasparenti verso il passato,
+  // senza più bagliore — stesso senso di velocità, stile "flat" come il resto.
   if(trail&&trail.length){
     trail.forEach((tp,i)=>{
       const a=(i+1)/(trail.length+1);
       ctx.save();
-      ctx.globalAlpha=a*.3;
-      ctx.fillStyle='#ffd000'; ctx.shadowColor='#ffd000'; ctx.shadowBlur=8*a;
-      ctx.beginPath(); ctx.arc(tp.x,tp.y,2.5*a+1.2,0,TAU); ctx.fill();
+      ctx.globalAlpha=a*.35;
+      ctx.fillStyle='#ffd000';
+      ctx.beginPath(); ctx.arc(tp.x,tp.y,2.2*a+1,0,TAU); ctx.fill();
       ctx.restore();
     });
   }
   ctx.save(); ctx.translate(pos.x,pos.y); ctx.rotate(spin);
-  // Banana = thick curved crescent arc
+  // Banana = thick curved crescent arc, ora a tinta piatta + contorno nero
+  // (via gradiente radiale e bagliore), coerente col linguaggio cartoon
+  // già usato per gorilla/edifici.
   const R=11,r=6,sweep=Math.PI*.72;
   const sA=-Math.PI/2-sweep/2, eA=-Math.PI/2+sweep/2;
-  ctx.shadowColor='#ffd000'; ctx.shadowBlur=22;
-  ctx.beginPath();
-  ctx.arc(0,0,R,sA,eA);
-  ctx.arc(0,0,r,eA,sA,true);
-  ctx.closePath();
-  const bg=ctx.createRadialGradient(0,-2,1,0,0,R);
-  bg.addColorStop(0,'#fff7a0');
-  bg.addColorStop(.4,'#ffd000');
-  bg.addColorStop(1,'#c87800');
-  ctx.fillStyle=bg; ctx.fill();
-  // shine
-  ctx.shadowBlur=0; ctx.fillStyle='rgba(255,255,220,.55)';
+  const body=()=>{
+    ctx.beginPath();
+    ctx.arc(0,0,R,sA,eA);
+    ctx.arc(0,0,r,eA,sA,true);
+    ctx.closePath();
+  };
+  body(); ctx.fillStyle='#ffd000'; ctx.fill();
+  ctx.strokeStyle=INK; ctx.lineWidth=1.8; body(); ctx.stroke();
+  // riflesso piatto (nessun gradiente)
+  ctx.fillStyle='rgba(255,255,220,.5)';
   ctx.beginPath();
   ctx.arc(0,-1,R*.42,sA,sA+sweep*.45);
   ctx.arc(0,-1,r*.9,sA+sweep*.45,sA,true);
   ctx.closePath(); ctx.fill();
-  // tips
-  ctx.fillStyle='#7a4400';
-  ctx.beginPath(); ctx.arc(R*Math.cos(sA),R*Math.sin(sA),2.5,0,TAU); ctx.fill();
-  ctx.beginPath(); ctx.arc(R*Math.cos(eA),R*Math.sin(eA),2.5,0,TAU); ctx.fill();
+  // ombra piatta sul lato opposto, un filo di volume senza sfumature
+  ctx.fillStyle='rgba(180,110,0,.3)';
+  ctx.beginPath();
+  ctx.arc(0,1,R*.5,eA-sweep*.4,eA);
+  ctx.arc(0,1,r*.9,eA,eA-sweep*.4,true);
+  ctx.closePath(); ctx.fill();
+  // tips (punte scure) con sottile contorno nero
+  [sA,eA].forEach(ang=>{
+    ctx.beginPath(); ctx.arc(R*Math.cos(ang),R*Math.sin(ang),2.6,0,TAU);
+    ctx.fillStyle='#4a2800'; ctx.fill();
+    ctx.strokeStyle=INK; ctx.lineWidth=1; ctx.stroke();
+  });
   ctx.restore();
 }
 
@@ -890,34 +899,56 @@ function drawBanana(){
 function drawExplosion(){
   if(!state.explosion) return;
   const ex=state.explosion,p=Math.min((state.t-ex.t0)/ex.dur,1),ep=1-p;
+  const INK='#17100a';
   // Flash iniziale: un breve lampo pieno schermo nei primissimi istanti,
-  // per dare più "peso" all'impatto invece del solo bagliore locale.
+  // per dare più "peso" all'impatto invece del solo bagliore locale (invariato).
   if(p<.1){
     const fa=(1-p/.1)*.16;
     ctx.save(); ctx.globalAlpha=fa; ctx.fillStyle='#fff5cc';
     ctx.fillRect(0,0,CW,CH); ctx.restore();
   }
+  // Onde d'urto: tre anelli che si espandono e svaniscono (nessun bagliore,
+  // già "piatti" anche nella versione precedente — solo tratto più marcato).
   ctx.save();
   [1,.55,.28].forEach((sc,i)=>{
     const rp=Math.max(0,p-i*.1);if(rp<=0)return;
-    ctx.globalAlpha=ep*.5*(1-i*.2);
+    ctx.globalAlpha=ep*.55*(1-i*.2);
     ctx.strokeStyle=i===0?'#ffee88':i===1?C.expl:'#ff1100';
     ctx.lineWidth=(4-i)*(1-rp);
     ctx.beginPath(); ctx.arc(ex.x,ex.y,EXPL_R*rp*(1+i*.6),0,TAU); ctx.stroke();
   });
-  ctx.globalAlpha=1;
-  const rg=ctx.createRadialGradient(ex.x,ex.y,0,ex.x,ex.y,EXPL_R*ep);
-  rg.addColorStop(0,`rgba(255,255,230,${ep*.98})`);
-  rg.addColorStop(.22,`rgba(255,210,40,${ep*.9})`);
-  rg.addColorStop(.55,`rgba(255,70,0,${ep*.75})`);
-  rg.addColorStop(1,'rgba(160,0,0,0)');
-  ctx.fillStyle=rg; ctx.shadowColor='#ff8800'; ctx.shadowBlur=30*ep;
-  ctx.beginPath(); ctx.arc(ex.x,ex.y,EXPL_R*ep,0,TAU); ctx.fill(); ctx.shadowBlur=0;
-  ctx.restore();
+  ctx.globalAlpha=1; ctx.restore();
+  // Nucleo: stella fumettistica a punte, piatta con grosso contorno nero, al
+  // posto del vecchio bagliore radiale sfumato — stessa dinamica (piena
+  // all'impatto, si restringe e sparisce seguendo ep), cambia solo lo stile,
+  // coerente col linguaggio "flat fill + ink outline" di gorilla/edifici/banana.
+  const rad=EXPL_R*ep;
+  if(rad>1){
+    ctx.save(); ctx.translate(ex.x,ex.y); ctx.globalAlpha=ep;
+    const spikes=9,outer=rad,inner=rad*.52;
+    const star=()=>{
+      ctx.beginPath();
+      for(let i=0;i<spikes*2;i++){
+        const a=(i/(spikes*2))*TAU-Math.PI/2;
+        const rr=i%2===0?outer:inner;
+        const x=Math.cos(a)*rr,y=Math.sin(a)*rr;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+    };
+    star(); ctx.fillStyle='#ffd000'; ctx.fill();
+    ctx.lineWidth=Math.max(1.5,outer*.09); ctx.strokeStyle=INK; star(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,inner*.9,0,TAU); ctx.fillStyle='#ff8800'; ctx.fill();
+    ctx.beginPath(); ctx.arc(0,0,inner*.45,0,TAU); ctx.fillStyle='#ff1100'; ctx.fill();
+    ctx.restore();
+  }
+  // Frammenti: cerchietti piatti con un filo di contorno nero, niente bagliore.
   state.expParts.forEach(pt=>{
     const px=pt.x+pt.vx*p*55,py=pt.y+pt.vy*p*55+.5*GRAV*p*p*35;
-    ctx.save(); ctx.globalAlpha=ep*.85; ctx.fillStyle=pt.col; ctx.shadowColor=pt.col; ctx.shadowBlur=8;
-    ctx.beginPath(); ctx.arc(px,py,pt.r*ep,0,TAU); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.globalAlpha=ep*.9; ctx.fillStyle=pt.col;
+    ctx.beginPath(); ctx.arc(px,py,pt.r*ep,0,TAU); ctx.fill();
+    ctx.strokeStyle=INK; ctx.lineWidth=1; ctx.stroke();
+    ctx.restore();
   });
 }
 
@@ -944,14 +975,26 @@ function drawAimGuide(){
   });
   ctx.globalAlpha=1;
   const al=46,ax=cx+Math.cos(-aRad)*al,ay=cy+Math.sin(-aRad)*al;
-  ctx.strokeStyle=col; ctx.lineWidth=2.5; ctx.shadowColor=col; ctx.shadowBlur=14; ctx.lineCap='round';
+  // Freccia di mira piatta: doppia passata (nera larga sotto, colore squadra
+  // sopra, stesso trucco "L" usato per gli arti del gorilla) invece del
+  // bagliore neon — e una punta piena col contorno nero al posto del
+  // triangolo pieno senza contorno.
+  const INK='#17100a';
+  ctx.lineCap='round';
+  ctx.strokeStyle=INK; ctx.lineWidth=5.5;
   ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ax,ay); ctx.stroke();
-  const an=Math.atan2(ay-cy,ax-cx),ah=10;
-  ctx.fillStyle=col;
-  ctx.beginPath(); ctx.moveTo(ax,ay);
-  ctx.lineTo(ax-Math.cos(an-.5)*ah,ay-Math.sin(an-.5)*ah);
-  ctx.lineTo(ax-Math.cos(an+.5)*ah,ay-Math.sin(an+.5)*ah);
-  ctx.closePath(); ctx.fill(); ctx.shadowBlur=0; ctx.restore();
+  ctx.strokeStyle=col; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ax,ay); ctx.stroke();
+  const an=Math.atan2(ay-cy,ax-cx),ah=11;
+  const tri=()=>{
+    ctx.beginPath(); ctx.moveTo(ax,ay);
+    ctx.lineTo(ax-Math.cos(an-.5)*ah,ay-Math.sin(an-.5)*ah);
+    ctx.lineTo(ax-Math.cos(an+.5)*ah,ay-Math.sin(an+.5)*ah);
+    ctx.closePath();
+  };
+  tri(); ctx.fillStyle=col; ctx.fill();
+  ctx.strokeStyle=INK; ctx.lineWidth=2; tri(); ctx.stroke();
+  ctx.restore();
 }
 
 // ─── DRAW: HUD ────────────────────────────────────────────────
