@@ -1,4 +1,4 @@
-1.11.0
+1.15.0
 
 Changelog
 =========
@@ -7,6 +7,203 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.15.0 — 2026-10-17
+---------------------
+Primo passo dell'ibridazione con Worms Armageddon chiesta dall'utente il 2026-10-15
+(idea "informale" in roadmap, mai affrontata finora): un piccolo arsenale oltre alla
+banana, scelto dall'utente tra alcune opzioni proposte come punto di partenza più
+rappresentativo dell'identità "Worms" rispetto alle altre (spostamento prima del tiro,
+casse con potenziamenti, crateri irregolari + danno da caduta — tutte ancora idee aperte,
+vedi sotto).
+
+Aggiunto:
+- **Arsenale a rotazione**: oltre alla banana (invariata), una **granata** che rimbalza
+  su edifici/strada perdendo energia ad ogni rimbalzo ed esplode allo scadere di una
+  miccia di 2.2s (dovunque si trovi in quel momento, anche ancora in volo), e una
+  **bomba a tempo** che si ferma dove atterra (senza rimbalzare) e aspetta lì, immobile,
+  una miccia più lunga (3.4s). Un colpo diretto su un gorilla fa sempre esplodere subito,
+  qualunque arma — mai un rimbalzo o un atterraggio mancato.
+- **Selezione dell'arma** tramite tre chip (🍌/💣/⏳) in basso sullo schermo, visibili
+  solo mentre il giocatore **umano** di turno sta mirando (mai durante il turno dell'IA,
+  mai mentre un proiettile è in volo).
+- Granata e bomba a tempo hanno un disegno proprio (corpo rotondo nei colori del tipo
+  d'arma, con una miccia accesa che lampeggia sempre più in fretta avvicinandosi allo
+  scoppio — stesso principio già usato dal countdown del timer per turno, v1.13.0) e un
+  piccolo "tic" sonoro ad ogni rimbalzo della granata, distinto dagli altri suoni già
+  presenti.
+- Scelte di scoping per restare su un primo giro contenuto: nessuna scorta/munizioni
+  limitate (tutte le armi sono sempre disponibili, come già la banana); la scelta
+  dell'arma **non si ricorda** tra un turno e l'altro (si riparte sempre dalla banana ad
+  ogni nuovo turno); l'**IA continua a usare solo la banana** (la riga di chip resta
+  nascosta e inutilizzabile durante il suo turno).
+
+Bug trovato e corretto prima della consegna (verifica automatizzata di routine, non
+dall'utente): `stepBanana()`, la funzione che fa avanzare la fisica del proiettile ad
+ogni fotogramma, ricostruiva un oggetto nuovo ad ogni chiamata copiando solo i campi che
+conosceva da prima (posizione, velocità, rotazione...) — i tre campi nuovi aggiunti per
+le armi (quale arma è, quando è partita la sua miccia, se si è già fermata) non erano tra
+questi e sparivano già al fotogramma successivo al lancio, facendo tornare silenziosamente
+granata e bomba a tempo al comportamento della banana (esplosione al primo contatto,
+nessuna miccia) non appena il proiettile si muoveva per più di un fotogramma. Corretto
+facendo sì che `stepBanana()` preservi sempre tutti i campi del proiettile, aggiornando
+solo quelli di sua competenza.
+
+Non affrontato in questo giro (restano tra le idee): il colpo aereo (terza arma
+accennata nell'idea originale), la possibilità di spostarsi di poco prima di tirare, le
+casse con potenziamenti, i crateri meno regolari e il danno da caduta.
+
+Verificato: `node --check` per la sintassi; rieseguiti tutti i test di regressione (mira
+a 360°, fusione crateri, difficoltà IA, pannello impostazioni, isolamento dei chip,
+screen-shake/detriti) — ancora validi; nuovo test automatico (Node + jsdom) che controlla:
+le proprietà delle tre armi, il reset dell'arma ad ogni nuovo turno, che `doFire()` porti
+l'arma scelta sul proiettile lanciato, che la granata rimbalzi a terra senza esplodere e
+continui a comportarsi da granata anche dopo molti fotogrammi (il test che ha scoperto il
+bug sopra), che granata e bomba a tempo esplodano comunque allo scadere della rispettiva
+miccia (in volo o da ferme), che un colpo diretto su un gorilla esploda sempre subito con
+qualunque arma, e che la riga di chip sia visibile solo durante il turno umano; test
+dedicato (browser headless) che clicca un chip arma e verifica che le altre righe di
+chip/lo stato di gioco restino invariati; screenshot automatizzati (browser headless) in
+landscape e portrait della riga di chip delle armi, della granata in volo e alla
+detonazione, e della bomba a tempo ferma sul tetto di un edificio.
+
+v1.14.0 — 2026-10-17
+---------------------
+Prima idea in roadmap scelta dall'utente dopo l'azzeramento del backlog (v1.13.0):
+screen-shake leggero e detriti sull'esplosione, finora solo annotati come spunto
+("eventualmente crollo parziale di un edificio molto danneggiato" resta un'idea futura,
+non affrontata in questo giro — vedi sotto).
+
+Aggiunto:
+- **Screen-shake leggero** ad ogni esplosione: un breve tremolio dello schermo (0.28s,
+  ampiezza che decresce fino a zero), più marcato su un colpo diretto a un gorilla (±7px)
+  che su un impatto a vuoto su edificio/strada (±5px). Applicato solo al "mondo" di gioco
+  (edifici, gorilla, banana, esplosione, detriti, freccia di mira): l'HUD viene disegnato
+  fuori dalla trasformazione apposta, così punteggio, timer e barra potenza restano sempre
+  fermi e leggibili anche durante lo scuotimento.
+- **Detriti che cadono dagli edifici colpiti**: finora un colpo lasciava solo il "buco"
+  circolare del cratere, senza altro segno del materiale rimosso. Ora 5-8 piccoli
+  frammenti rettangolari, nei colori della facciata/fianco dell'edificio colpito, schizzano
+  fuori dal punto d'impatto e cadono per gravità, ruotando, fino a sparire (dissolvenza
+  negli ultimi 0.3s di vita, o rimossi non appena escono dal fondo dello schermo). Un
+  tetto di sicurezza (max 90 pezzi contemporanei) evita accumuli in caso di colpi molto
+  ravvicinati, stesso tipo di cautela prestazionale già usata altrove nel codice per i
+  dispositivi mobili di fascia bassa.
+- Nessun cambiamento a fisica, hitbox, crateri o punteggio: solo due effetti visivi in
+  più sull'esplosione, lo shake sul mondo di gioco e i detriti sugli impatti su edificio.
+
+Non affrontato in questo giro (resta tra le idee): il crollo parziale di un edificio
+molto danneggiato, menzionato come eventualità nella stessa voce di roadmap — i detriti
+"al volo" di questo giro sono un primo passo nella stessa direzione, ma un vero crollo
+strutturale (deformazione della sagoma dell'edificio oltre il semplice cratere) è un
+pezzo di lavoro a sé, rimandato per non allargare troppo questo giro.
+
+Verificato: `node --check` per la sintassi; rieseguiti tutti i test di regressione (mira
+a 360°, fusione crateri, difficoltà IA, pannello impostazioni, isolamento dei chip) —
+ancora validi, dato che questo giro non tocca nessuna di quelle aree; nuovo test
+automatico (Node + jsdom) che controlla: `blastBuilding()` genera 5-8 detriti nei colori
+dell'edificio colpito; la fisica dei detriti (gravità, rimozione a fine vita o fuori
+schermo) in `loop()`; il tetto di sicurezza sul numero massimo di detriti; che
+`triggerExplosion()` avvia sempre uno shake con durata finita che si disattiva da solo;
+che un colpo diretto scuote più di un impatto a vuoto. Screenshot automatizzati (browser
+headless) in landscape e portrait con un'esplosione su edificio forzata a metà
+animazione (shake attivo, detriti appena generati) e qualche fotogramma dopo (shake
+esaurito, detriti ancora in caduta), per confermare visivamente che l'HUD resta fermo e
+leggibile e che i detriti sono visibili e coerenti con lo stile cartoon piatto.
+
+v1.13.0 — 2026-10-17
+---------------------
+Ultimo item rimasto nel backlog aperto, scelto dall'utente tra alcune opzioni proposte:
+un pannello impostazioni con gravità regolabile (come nell'originale GORILLA.BAS, dove
+la sceglieva il giocatore), densità edifici e un timer per turno (idea nuova, non
+presente nell'originale).
+
+Aggiunto:
+- **Pannello impostazioni**, raggiungibile da un link "⚙️ impostazioni" in fondo alla
+  schermata iniziale, con tre righe di chip nello stesso linguaggio visivo già usato per
+  "quante partite?" e "difficoltà IA":
+  - **Gravità**: Bassa (5.5) / Normale (9.8, invariata) / Alta (15) — applicata ad ogni
+    nuova partita, usata dalla fisica del lancio e dalla ricerca dell'IA allo stesso modo.
+  - **Densità edifici**: Radi (6) / Normale (9, invariata) / Fitti (13) — numero di
+    edifici generati da `buildCity()` ad ogni round.
+  - **Timer per turno**: No (invariato, nessun limite) / 15s / 30s. Se attivo, riguarda
+    solo i giocatori umani (mai l'IA, che spara comunque entro 0.5–1.6s secondo la
+    difficoltà): un conto alla rovescia compare nell'HUD accanto all'angolo, diventa
+    rosso/lampeggiante negli ultimi 5 secondi, e se scade mentre si sta ancora mirando il
+    turno passa senza sparare (nessun danno, nessun punto), con un breve avviso "⏱ TEMPO
+    SCADUTO!" a schermo.
+- Tutte e tre le scelte sono ricordate tra le sessioni via `localStorage` (default:
+  identici al comportamento precedente — chi non apre il pannello non nota differenze).
+- Nessun cambiamento alla mira del giocatore, al calcolo dell'IA in sé o al resto del
+  gameplay: solo i tre parametri sopra sono ora regolabili invece che fissi.
+
+Corretto (bug introdotto e preso prima della consegna):
+- **I nuovi chip di gravità/densità/timer riusavano la classe `dc`** già introdotta in
+  v1.12.0 per i chip di difficoltà IA. Il selettore che raccoglie i chip di difficoltà
+  (`document.querySelectorAll('.dc')`, non ancora delimitato ad un contenitore
+  specifico) finiva quindi per includere anche i nuovi chip delle impostazioni: cliccare
+  un qualsiasi chip di gravità/densità/timer faceva scattare anche il gestore dei chip di
+  difficoltà, che azzerava lo stato "selezionato" di TUTTI i chip di ogni riga (incluse
+  quelle non toccate) e sovrascriveva `aiDiff` con un valore non valido. Esattamente lo
+  stesso tipo di collisione già preso e corretto in v1.12.0 tra i chip "quante partite?"
+  e "difficoltà IA", questa volta tra "difficoltà IA" e le tre nuove righe. Trovato con
+  un nuovo test automatico scritto apposta per prevenire la ricorrenza di questo
+  pattern (vedi sotto), non dall'utente. Corretto delimitando il selettore dei chip di
+  difficoltà al loro contenitore (`#diffRow .dc`), come già fanno le tre righe nuove.
+
+Verificato: `node --check` per la sintassi; rieseguiti tutti i test di regressione (mira
+a 360°, fusione crateri, difficoltà IA) — ancora validi; nuovo test automatico (Node +
+jsdom) sull'applicazione di gravità/densità/timer a `initGame()`/`nextTurn()`/`loop()`,
+incluso lo scadere del timer che passa il turno senza generare un'esplosione; nuovo test
+dedicato (browser headless) che clicca un chip per ciascuna delle cinque righe ora
+presenti (partite, difficoltà, gravità, densità, timer) in sequenza e verifica che
+nessuna riga disturbi le altre — pensato apposta per intercettare in futuro la stessa
+famiglia di bug vista sia qui che in v1.12.0; screenshot automatizzati (browser
+headless) in landscape e portrait del pannello impostazioni, della selezione dei chip,
+di una partita con città più fitta e gravità alta, del conto alla rovescia (anche
+nell'ultimo tratto rosso/lampeggiante) e dell'avviso di tempo scaduto.
+
+v1.12.0 — 2026-10-16
+---------------------
+Primo item del backlog aperto affrontato dopo il completamento del redesign cartoon
+(v1.11.0): "nessuna difficoltà IA selezionabile" — finora il rumore sulla mira
+dell'avversario computer era fisso (±7° sull'angolo, ±5% sulla potenza).
+
+Aggiunto:
+- **Tre livelli di difficoltà IA** (Facile / Medio / Difficile), scelti con dei chip
+  nella schermata iniziale accanto a quelli già esistenti per il numero di partite,
+  visibili sempre ma rilevanti solo in modalità "vs AI". Scelta ricordata tra le
+  sessioni via `localStorage` (default: Medio, identico al comportamento di prima —
+  chi non tocca il nuovo controllo non nota differenze).
+- La ricerca a griglia che trova il tiro teoricamente migliore (`computeAI()`) resta
+  identica per tutte le difficoltà, per non reintrodurre il costo prestazionale già
+  tagliato in v1.1.0 per i dispositivi mobili di fascia bassa. Cambiano invece due
+  cose: quanto "rumore" casuale viene aggiunto al tiro migliore trovato (Facile
+  ±16°/±14%, Medio ±7°/±5% — invariato, Difficile ±2°/±2%) e quanto tempo l'IA
+  sembra "pensarci" prima di sparare (Facile 1.6s, Medio 1.0s — invariato,
+  Difficile 0.5s).
+- Nessun cambiamento alla mira/fisica del giocatore umano né alla modalità 1 vs 1.
+
+Corretto (bug introdotto e preso prima della consegna):
+- **I chip "difficoltà IA" condividevano la classe CSS/JS dei chip "quante
+  partite?".** La prima versione dei nuovi pulsanti riusava la classe `lc` già
+  usata dai chip del formato match; lo script che gestisce il click su quei chip
+  seleziona però tutti gli elementi `.lc` della pagina, quindi cliccare un chip di
+  difficoltà avrebbe anche sovrascritto il numero di partite del match (con un
+  valore `NaN`, dato che i chip di difficoltà non hanno l'attributo `data-len`).
+  Trovato durante la verifica automatizzata di routine (non dall'utente): corretto
+  dando ai nuovi chip una classe propria (`dc`) con il suo stile CSS dedicato,
+  separata da quella dei chip del formato match.
+
+Verificato: `node --check` per la sintassi; rieseguiti i test di regressione (mira
+a 360°, fusione crateri) — ancora validi; nuovo test automatico (Node + jsdom) che
+controlla la dispersione delle mire prodotte da `computeAI()` alle diverse
+difficoltà (Facile nettamente più dispersa di Difficile su 60 tiri), il ritardo
+usato da `nextTurn()` per ciascuna difficoltà, e la persistenza/validazione del
+valore salvato in `localStorage`; screenshot automatizzati (browser headless) in
+landscape e portrait della schermata iniziale coi nuovi chip, della selezione di
+una difficoltà (verificando che il chip del formato match resti invariato e
+viceversa) e di un turno dell'IA giocato fino in fondo.
 
 v1.11.0 — 2026-10-16
 ---------------------
