@@ -20,13 +20,18 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Share Tech Mono',monospace}
 #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
-/* v1.16.0: l'area di gioco (canvas + tutti i pannelli sopra di esso) vive
-   dentro #stage, che ha sempre le proporzioni 16:9 del canvas e viene
-   centrato da #wrap con bande nere (sopra/sotto in verticale, ai lati in
-   orizzontale) quando lo schermo non è già 16:9 — invece di passare a un
-   canvas "stretto" in verticale. Così i pannelli (posizionati rispetto a
-   #stage) restano sempre allineati alla parte di schermo davvero visibile
-   del gioco, anche quando è più piccola del telefono. Vedi resize(). */
+/* L'area di gioco (canvas + i pannelli legati davvero alla partita: countdown,
+   "AI calcola", riga armi) vive dentro #stage, dimensionato da resize() per
+   riempire sempre tutto lo schermo disponibile (nessuna banda nera, il
+   formato interno segue l'orientamento reale del dispositivo — v1.16.1,
+   dopo che il formato fisso 16:9 di v1.16.0 è stato scartato). Tenerla in
+   un contenitore proprio (invece che diretta dentro #wrap) serve comunque
+   a due cose: i pannelli di gioco restano sempre allineati al canvas anche
+   nei rari casi in cui lo scarto d'aspetto lascia un piccolo margine, e
+   #stage deve restare PRIMA dei menu (.ov) nell'ordine degli elementi della
+   pagina, altrimenti il canvas finirebbe sopra di essi nello stacking e
+   intercetterebbe i loro click (bug preso e corretto durante lo sviluppo di
+   v1.16.0). Vedi resize(). */
 #stage{position:relative}
 canvas{display:block;touch-action:none;width:100%;height:100%}
 .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:all}
@@ -110,19 +115,17 @@ canvas{display:block;touch-action:none;width:100%;height:100%}
 <body>
 <div id="wrap">
   <div id="sp"><div id="spHint">tocca per continuare</div></div>
-  <!-- v1.16.0: solo i pannelli legati davvero al campo di gioco (countdown,
-       "AI calcola", riga armi) stanno dentro #stage, che ha sempre le
-       proporzioni 16:9 del canvas — così restano allineati alla parte di
-       schermo visibile anche quando è più piccola del telefono (vedi
-       resize() e la nota CSS su #stage). I menu (titolo/impostazioni/fine
-       partita) e i controlli sempre presenti (audio, versione) restano
-       invece a schermo intero come prima: sono pannelli di interfaccia, non
-       hanno bisogno di seguire il formato della città. #stage deve restare
-       PRIMA di questi pannelli nel markup, altrimenti il canvas (che ci sta
-       dentro) finirebbe sopra nello stacking e intercetterebbe i click
-       destinati ai loro pulsanti anche quando il canvas è "sotto" a tutti
-       gli effetti (nessuno z-index è impostato su .ov, che fin qui ha
-       sempre contato solo sull'ordine nel markup). -->
+  <!-- Solo i pannelli legati davvero al campo di gioco (countdown, "AI
+       calcola", riga armi) stanno dentro #stage, che resize() dimensiona
+       per riempire sempre tutto lo schermo (vedi la nota CSS su #stage). I
+       menu (titolo/impostazioni/fine partita) e i controlli sempre presenti
+       (audio, versione) restano a schermo intero come prima: sono pannelli
+       di interfaccia, non hanno bisogno di seguire il formato della città.
+       #stage deve restare PRIMA di questi pannelli nel markup, altrimenti
+       il canvas (che ci sta dentro) finirebbe sopra nello stacking e
+       intercetterebbe i click destinati ai loro pulsanti anche quando il
+       canvas è "sotto" a tutti gli effetti (nessuno z-index è impostato su
+       .ov, che fin qui ha sempre contato solo sull'ordine nel markup). -->
   <div id="stage">
   <canvas id="gc"></canvas>
   <div id="ct" class="hide"><div id="ch">⚡ TIENI PREMUTO · RILASCIA PER SPARARE</div></div>
@@ -209,7 +212,7 @@ canvas{display:block;touch-action:none;width:100%;height:100%}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.16.0';
+const VERSION='1.16.1';
 // GRAV e N_BLDG non sono più costanti da v1.13.0: il pannello impostazioni le
 // può cambiare (vedi GRAVITY_PRESETS/DENSITY_PRESETS più sotto), applicate ad
 // ogni nuova partita in initGame().
@@ -729,7 +732,15 @@ function initGame(m){
   // applicate qui così ogni nuova partita (incluso "PROSSIMA PARTITA" dentro
   // lo stesso match) riflette l'ultima scelta salvata.
   GRAV=GRAVITY_PRESETS[gravKey]||9.8;
-  N_BLDG=DENSITY_PRESETS[densKey]||9;
+  // v1.16.1: più edifici (più stretti) sia in verticale di default sia,
+  // ancora di più, in orizzontale — per dare la sensazione di "più margine
+  // di gioco" chiesta dall'utente senza bande nere e senza togliere
+  // schermo utile (v1.16.0, poi scartato). La densità scelta nel pannello
+  // impostazioni resta il punto di partenza, solo moltiplicata in base
+  // all'orientamento di gioco attuale (CW/CH, già aggiornati da resize()
+  // prima che initGame() venga chiamato).
+  const ORIENT_BLDG_MULT = CW>=CH ? 1.6 : 1.3;
+  N_BLDG=Math.max(4, Math.min(22, Math.round((DENSITY_PRESETS[densKey]||9)*ORIENT_BLDG_MULT)));
   const buildings=buildCity();
   buildings.forEach(b=>renderBuilding(b));
   state={
@@ -1706,26 +1717,54 @@ function loop(){
 }
 
 // ─── INPUT ────────────────────────────────────────────────────
-// v1.16.0: il gioco è sempre in formato largo 16:9 (CW/CH restano fissi,
-// non si passa più a un canvas "stretto" in verticale quando il telefono è
-// tenuto dritto) — scelta dell'utente per avere sempre lo stesso margine di
-// gioco e più palazzi visibili in mezzo, qualunque sia l'orientamento del
-// dispositivo. Qui si scala per intero quel formato fisso nello spazio
-// disponibile, con bande nere (sopra/sotto in verticale, ai lati in
-// orizzontale, come un video widescreen su un telefono dritto): #stage
-// (che contiene canvas + tutti i pannelli) prende esattamente quella
-// dimensione scalata, così tutto resta allineato alla parte di schermo
-// davvero visibile del gioco. Poiché CW/CH non cambiano più da un resize
-// all'altro, non serve più ridimensionare città/crateri già generati.
+// v1.16.0 aveva fissato CW/CH a un formato largo 16:9 sempre uguale, con
+// bande nere a riempire lo spazio in verticale — provato dall'utente e
+// scartato (toglieva schermo utile in verticale senza dare nulla in più
+// ruotando, dato che il riquadro restava comunque della stessa dimensione
+// fissa). v1.16.1 torna quindi a riempire sempre lo schermo per intero,
+// nessuna banda nera: il formato interno (CW/CH) torna a seguire
+// l'orientamento reale del dispositivo, esattamente come prima di v1.16.0.
+// La sensazione di "più margine/più palazzi" richiesta dall'utente viene
+// invece data aumentando il numero di edifici in base all'orientamento
+// (vedi initGame()), non più cambiando la forma dello schermo.
 function resize(){
   const vw=window.innerWidth,vh=window.innerHeight;
+  const newCW=vw>=vh?700:390, newCH=vw>=vh?390:700;
+  const orientationChanged=(newCW!==CW||newCH!==CH);
+  const oldCW=CW, oldCH=CH;
+  CW=newCW; CH=newCH;
+  EXPL_R=Math.round(CW*.052);
   const scale=Math.min(vw/CW,vh/CH);
   canvas.width=CW; canvas.height=CH;
   const stage=document.getElementById('stage');
   stage.style.width=Math.round(CW*scale)+'px';
   stage.style.height=Math.round(CH*scale)+'px';
-  if(state&&state.phase!=='done') show('playing');
-  else if(!state) show('title');
+  if(state&&state.phase!=='done'){
+    // Il numero di edifici di una partita in corso non viene toccato da un
+    // resize (solo ridimensionato se l'orientamento cambia davvero): si
+    // ridisegna la stessa città, più o meno fitta, non una nuova — la densità
+    // "aumentata per orientamento" si applica solo a una nuova partita (vedi
+    // initGame()), per non perdere crateri/progressi ruotando a metà round.
+    if(orientationChanged){
+      const sx=CW/oldCW, sy=CH/oldCH;
+      state.buildings.forEach(b=>{
+        const newX=b.x*sx, newH=b.h*sy, newW=b.w*sx, newY=CH-newH;
+        b.craters.forEach(cr=>{
+          cr.cx=newX+(cr.cx-b.x)*sx;
+          cr.cy=newY+(cr.cy-b.y)*sy;
+          cr.r*=(sx+sy)/2;
+        });
+        b.x=newX; b.y=newY; b.w=newW; b.h=newH;
+        renderBuilding(b);
+      });
+      state.gorillas=placeGorillas(state.buildings);
+      state.stars.forEach(s=>{ s.x*=sx; s.y*=sy; });
+      if(state.phase==='flying'||state.phase==='exploding'){
+        state.phase='aiming'; state.banana=null; state.explosion=null; state.throwAnim=false;
+      }
+    }
+    show('playing');
+  } else if(!state) show('title');
   else show('gameover');
 }
 function getPos(e){
