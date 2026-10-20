@@ -1,4 +1,4 @@
-1.15.0
+1.16.0
 
 Changelog
 =========
@@ -7,6 +7,49 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.16.0 — 2026-10-20
+---------------------
+Idea dell'utente dopo aver provato l'arsenale di v1.15.0: dare "più margine di gioco"
+trasformando il gioco in 16:9 invece che in 9:16, con più spazio e più palazzi in mezzo —
+anche tenendo il telefono dritto, come prima.
+
+Cambiato:
+- **Il campo di gioco è ora sempre in formato largo 16:9**, qualunque sia l'orientamento
+  del dispositivo: prima, tenendo il telefono dritto, il gioco passava a un canvas
+  "stretto" verticale (9:16); ora resta sempre nel formato largo già usato in orizzontale,
+  scalato per intero nello spazio disponibile. Risultato: la stessa porzione di città (e
+  lo stesso numero di palazzi) è sempre visibile, con bande nere sopra e sotto quando lo
+  schermo è più stretto del gioco (tenendo il telefono dritto) o ai lati quando è più
+  largo (tablet/desktop molto ampi) — come un video widescreen.
+- I pannelli legati al campo di gioco (countdown "tieni premuto", "AI calcola", tempo
+  scaduto, riga di selezione armi) restano sempre allineati alla parte di schermo
+  davvero visibile del gioco, bande nere escluse — prima, con bande grandi, sarebbero
+  finiti scollegati dalla città, vicino al bordo fisico dello schermo invece che vicino
+  al gioco vero e proprio. I menu (schermata iniziale, impostazioni, fine partita) e i
+  controlli sempre presenti (audio, numero di versione) restano invece a schermo intero
+  come prima, dato che non devono seguire il formato della città.
+- Una partita in corso (crateri, posizione dei gorilla) non viene più toccata da un
+  resize/cambio di orientamento: prima si ridimensionavano le coordinate della città ogni
+  volta che cambiava l'orientamento (es. aprendo la tastiera virtuale); ora il formato
+  interno del gioco non cambia più da un resize all'altro, quindi non c'è più nulla da
+  ridimensionare.
+
+Non affrontato in questo giro (resta in roadmap):
+- Durezza dei palazzi (sfruttando il rettangolo colorato già presente sui tetti) ed
+  eventuale crollo quando un palazzo è molto danneggiato — idea proposta nello stesso
+  messaggio di questa, rimandata al prossimo giro su scelta dell'utente.
+
+Verifica: suite di regressione completa (incl. weapons_test.js di v1.15.0) rieseguita e
+tutta verde; nuovo test dedicato alle nuove proporzioni fisse e alle bande nere
+(formato sempre 16:9, dimensioni corrette dello stage su schermi verticali/orizzontali
+estremi, crateri invariati dopo un resize); durante lo sviluppo un test con un vero
+browser (Playwright) ha scoperto che il canvas, spostato per errore sopra ai menu
+nell'ordine degli elementi della pagina, finiva per intercettare i click destinati ai
+loro pulsanti anche quando i menu dovevano essere sopra — corretto riportando il canvas
+prima dei menu nel markup; verifica visiva via screenshot in orizzontale, verticale e in
+un formato verticale estremo (per controllare le bande nere e l'allineamento dei
+pannelli anche in casi limite).
 
 v1.15.0 — 2026-10-17
 ---------------------
