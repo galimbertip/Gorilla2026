@@ -1,4 +1,4 @@
-1.16.0
+1.16.1
 
 Changelog
 =========
@@ -7,6 +7,47 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.16.1 — 2026-10-20
+---------------------
+Correzione di v1.16.0, segnalata subito dopo averla provata: "non funziona benissimo... di
+default il gioco parte sempre con lo schermo verticale, ma ora taglia la parte alta e
+bassa. Se ruoto lo schermo poi, non ho un ampliamento del campo di gioco, ma ho sempre lo
+stesso spazio". Il formato fisso 16:9 di v1.16.0 (con bande nere a riempire lo spazio in
+verticale) toglieva schermo utile senza dare nulla in più ruotando, dato che il riquadro
+restava comunque delle stesse dimensioni fisse — non era l'effetto voluto. Chiarito con
+l'utente tra tre alternative concrete, questa è quella scelta.
+
+Cambiato:
+- **Via le bande nere**: il gioco torna a riempire sempre tutto lo schermo per intero,
+  nessun taglio sopra/sotto, col formato interno che segue di nuovo l'orientamento reale
+  del dispositivo (stretto in verticale, largo in orizzontale) — esattamente come prima
+  di v1.16.0.
+- **La sensazione di "più margine di gioco"/"più palazzi" ora viene da una città più
+  fitta**, non dal formato dello schermo: una nuova partita genera più edifici (più
+  stretti) del preset di densità scelto nel pannello impostazioni — circa il 30% in più
+  tenendo il telefono dritto (il caso di default), circa il 60% in più in orizzontale, così
+  ruotando si vede davvero qualcosa in più, non lo stesso spazio incorniciato in modo
+  diverso. La scelta di densità (radi/normale/fitti) resta il punto di partenza: cambia
+  solo quanto viene moltiplicata in base all'orientamento di gioco attuale.
+- Il numero di edifici di una partita già in corso non cambia ruotando lo schermo a metà
+  round (si ridimensiona la stessa città, non se ne genera una nuova) — scelta coerente
+  con il comportamento "resize non distruttivo" di v1.1.0, che non tocca mai crateri e
+  progressi di una partita in corso.
+- Resta invariata la correzione di v1.16.0 sull'ordine degli elementi della pagina (il
+  canvas prima dei menu nel markup, per via dello z-index implicito): non c'entra con le
+  bande nere, è una correzione a parte che restava comunque valida.
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione
+precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni — con un
+suo test aggiornato per riflettere la nuova densità legata all'orientamento, isolamento
+dei chip, screen-shake/detriti, arsenale v1.15.0) — tutta verde; nuovo test automatico
+dedicato (Node + jsdom) che conferma che il formato interno torni a seguire
+l'orientamento reale, che lo stage torni a riempire quasi tutto lo schermo (niente più
+banda nera grande come in v1.16.0), che una nuova partita generi più edifici in
+orizzontale che in verticale, e che un resize senza un vero cambio di orientamento non
+tocchi la partita in corso; verifica visiva via screenshot (browser headless) in
+verticale e orizzontale, a confronto diretto con quelli di v1.16.0.
 
 v1.16.0 — 2026-10-20
 ---------------------
