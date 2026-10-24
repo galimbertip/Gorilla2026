@@ -236,7 +236,7 @@ canvas{display:block;touch-action:none;width:100%;height:100%}
 'use strict';
 const TAU=Math.PI*2;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const VERSION='1.19.0';
+const VERSION='1.20.0';
 // GRAV e N_BLDG non sono più costanti da v1.13.0: il pannello impostazioni le
 // può cambiare (vedi GRAVITY_PRESETS/DENSITY_PRESETS più sotto), applicate ad
 // ogni nuova partita in initGame().
@@ -529,6 +529,32 @@ const PALS=[
   {face:'#38bdf8',side:'#1f9bd9',roof:'#a0e0ff',trim:'#0c3a56',win:'#fff1b8',sign:'#facc15',lobby:'#092a40'},
 ];
 
+// ─── DUREZZA EDIFICI + CROLLO PROGRESSIVO (v1.19.0→v1.20.0) ──────────────
+// Ogni edificio nasce con uno dei tre livelli di durezza, segnalato dal
+// colore della barra ("insegna") già presente in cima ad ogni edificio dal
+// v1.1.0 — finora tinta fissa per palette, ora riusata per indicare quanto
+// l'edificio è duro (e, man mano che incassa colpi, quanta "salute
+// strutturale" gli resta prima di crollare): verde=fragile, giallo=normale,
+// rosso=solida. Più alto il moltiplicatore, più danno cumulativo serve.
+const HARDNESS_TIERS={
+  fragile:{mult:.6, color:'#4ade80'},
+  normale:{mult:1,  color:'#facc15'},
+  solida: {mult:1.6,color:'#f87171'}
+};
+function pickHardness(){
+  const r=Math.random();
+  return r<.25?'fragile':(r<.75?'normale':'solida'); // 25% / 50% / 25%
+}
+// Danno cumulativo (somma dei raggi d'esplosione assorbiti, vedi
+// applyStructuralDamage()) necessario al crollo completo, proporzionale
+// all'altezza originale dell'edificio (più alto = più "piani" da far
+// cadere) e al moltiplicatore di durezza.
+const COLLAPSE_DMG_PER_HEIGHT=1.8;
+// Un edificio crollato del tutto non sparisce: resta un cumulo di macerie
+// al 25% della sua altezza originale, mai a zero (evita una geometria
+// degenere e un edificio che svanisce di colpo).
+const COLLAPSE_MAX_SHRINK=.75;
+
 // ─── BUILDINGS ────────────────────────────────────────────────
 function buildCity(){
   const bs=[];let x=0;
@@ -537,9 +563,15 @@ function buildCity(){
     const w=i===N_BLDG-1?CW-x:rnd(minW,maxW);
     const h=rnd(CH*.28,CH*.72);
     const pal=PALS[i%PALS.length];
+    const hardness=pickHardness();
     bs.push({x,y:CH-h,w,h,pal,craters:[],off:null,
       // store seeded random values for consistent detail rendering
-      seed:Math.random()*1000});
+      seed:Math.random()*1000,
+      // Durezza + crollo progressivo: baseH è l'altezza originale, fissa;
+      // h/y sono "live" e si aggiornano via applyStructuralDamage() man
+      // mano che l'edificio incassa danno strutturale (vedi sotto).
+      hardness, baseH:h, dmg:0,
+      maxDmg:h*COLLAPSE_DMG_PER_HEIGHT*HARDNESS_TIERS[hardness].mult});
     x+=w;
   }
   return bs;
@@ -630,10 +662,18 @@ function renderBuilding(b){
     g.beginPath(); g.moveTo(0,tY+tDepth); g.lineTo(fw,tY+tDepth); g.stroke();
   }
 
-  // ── INSEGNA — barra piatta col contorno nero, niente glow ──────────
+  // ── BARRA DUREZZA — stessa barra già presente dal v1.1.0 ("insegna"),
+  //    ora riusata per indicare quanto l'edificio è duro e quanta "salute
+  //    strutturale" gli resta prima di crollare, invece del vecchio colore
+  //    fisso legato alla palette: fondo scuro nel colore della durezza,
+  //    riempimento che si svuota via via che l'edificio incassa danno.
+  const hTier=HARDNESS_TIERS[b.hardness]||HARDNESS_TIERS.normale;
+  const remFrac=b.maxDmg>0?Math.max(0,1-(b.dmg||0)/b.maxDmg):1;
   const sY=TH+fh*.1, sH=Math.max(7,fh*.038);
-  g.fillStyle=p.sign; g.strokeStyle=INK; g.lineWidth=1.5;
+  g.fillStyle=shade(hTier.color,.3); g.strokeStyle=INK; g.lineWidth=1.5;
   g.beginPath(); g.roundRect(6,sY-sH/2,fw-12,sH+2,2); g.fill(); g.stroke();
+  const barW=(fw-12)*remFrac;
+  if(barW>1){ g.fillStyle=hTier.color; g.fillRect(6,sY-sH/2,barW,sH+2); }
 
   // ── ANTENNA — linea e faro piatti ───────────────────────────────────
   const spX=fw*.3+rng()*fw*.4;
@@ -762,7 +802,7 @@ function hitGorilla(pos,gors,shooter,banana){
   return -1;
 }
 
-function blastBuilding(b,cx,cy,r){
+function blastBuilding(b,cx,cy,r,bi){
   // BUG: la soglia di fusione confrontava la distanza dal nuovo impatto solo
   // col raggio del cratere ESISTENTE (cr.r*1.4), ignorando il raggio del
   // nuovo colpo (r). Con EXPL_R~36px (landscape) la soglia iniziale era di
@@ -785,8 +825,58 @@ function blastBuilding(b,cx,cy,r){
     }
   }
   if(!merged) b.craters.push({cx,cy,r,jitter:makeCraterJitter()});
+  // Durezza + crollo progressivo: ogni colpo logora anche la struttura
+  // dell'edificio, non solo la sua facciata — vedi applyStructuralDamage().
+  // bi è opzionale (i chiamanti reali lo passano, bh è già a disposizione
+  // in loop()): se omesso si risale all'indice via state.buildings per
+  // restare compatibile con i test/script esistenti che chiamano
+  // blastBuilding() direttamente su un edificio preso da state.buildings.
+  const idx=(typeof bi==='number')?bi:(state&&state.buildings?state.buildings.indexOf(b):-1);
+  applyStructuralDamage(idx,r);
   renderBuilding(b);
   spawnDebris(b,cx,cy);
+}
+
+// Durezza edifici + crollo progressivo: ogni colpo che scava un cratere
+// (vedi blastBuilding()) logora anche la struttura dell'edificio, non solo
+// la sua facciata. Quando il danno cumulativo (b.dmg, la somma dei raggi
+// d'esplosione assorbiti) supera la capacità dell'edificio (b.maxDmg,
+// proporzionale alla sua altezza originale e al moltiplicatore di durezza —
+// vedi HARDNESS_TIERS), l'edificio comincia a perdere piani dall'alto: il
+// tetto scende (b.h cala, b.y aumenta, la base resta sempre ancorata a CH),
+// fino a un minimo del 25% dell'altezza originale (COLLAPSE_MAX_SHRINK — un
+// cumulo di macerie, mai zero). Se un gorilla è ancorato a quell'edificio
+// (gorillas[].buildingIdx, v1.18.0), scende insieme al tetto esattamente
+// come un passo di danno da caduta, sommandosi alla stessa soglia cumulativa
+// FALL_LETHAL già usata dai crateri sotto i piedi: un crollo abbastanza
+// grave può quindi essere fatale, come un colpo diretto.
+function applyStructuralDamage(bi,r){
+  if(bi==null||bi<0||!state||!state.buildings||!state.buildings[bi]) return;
+  const b=state.buildings[bi];
+  if(!(b.maxDmg>0)) return; // edifici "a mano" nei test senza maxDmg: restano indistruttibili
+  const oldH=b.h;
+  b.dmg=Math.min(b.maxDmg,(b.dmg||0)+r);
+  const frac=b.dmg/b.maxDmg;
+  const newH=b.baseH*(1-frac*COLLAPSE_MAX_SHRINK);
+  if(newH>=oldH) return; // danno non ancora sufficiente a far scendere il tetto
+  const delta=oldH-newH;
+  b.h=newH; b.y=CH-newH;
+  const buildingBaseY=b.y+b.h-GH;
+  for(let gi=0;gi<2;gi++){
+    const g=state.gorillas&&state.gorillas[gi];
+    if(!g||g.buildingIdx!==bi) continue;
+    const prevY=g.y;
+    const newY=Math.min(prevY+delta,buildingBaseY);
+    const actualDelta=newY-prevY;
+    if(actualDelta<=0) continue;
+    g.y=newY;
+    state.fallTotal[gi]=(state.fallTotal[gi]||0)+actualDelta;
+    spawnDebris(b,g.x+GW/2,g.y+GH);
+    state.shake={t0:state.t,dur:.22,mag:4};
+    if(state.fallTotal[gi]>=FALL_LETHAL&&state.phase!=='exploding'){
+      triggerExplosion(g.x+GW/2,g.y+GH*.3,gi,true);
+    }
+  }
 }
 
 // Crateri meno regolari (v1.18.0): prima ogni cratere era un cerchio
@@ -1893,7 +1983,7 @@ function loop(){
               // piccolo delle altre armi (radMult<1), le altre armi non
               // sono toccate (radMult assente -> 1).
               const r=EXPL_R*(wpn.radMult||1);
-              blastBuilding(state.buildings[bh],sp.x,sp.y,r);
+              blastBuilding(state.buildings[bh],sp.x,sp.y,r,bh);
               // Danno collaterale: come nell'originale, far crollare un palazzo troppo
               // vicino a un gorilla (anche il proprio) può ucciderlo anche senza un
               // colpo diretto. Controlla entrambi i gorilla, shooter incluso.
@@ -1921,7 +2011,7 @@ function loop(){
       for(const idx of [0,1]){ if(inGorillaHitbox(pos.x,pos.y,state.gorillas[idx])){ splashKilled=idx; break; } }
       const bh=hitBuilding(pos,state.buildings);
       if(bh!==-1){
-        blastBuilding(state.buildings[bh],pos.x,pos.y,EXPL_R);
+        blastBuilding(state.buildings[bh],pos.x,pos.y,EXPL_R,bh);
         if(splashKilled===-1) checkFallDamage(bh);
       }
       if(state.phase!=='exploding') triggerExplosion(pos.x,pos.y,splashKilled);
