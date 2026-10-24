@@ -1,4 +1,4 @@
-1.19.0
+1.20.0
 
 Changelog
 =========
@@ -7,6 +7,71 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.20.0 — 2026-10-24
+---------------------
+Richiesta dell'utente: "lavoriamo su durezza dei palazzi e crollo strutturale" — l'ultima
+idea rimasta in roadmap dal 2026-10-20, insieme al formato 16:9 (fatto, poi corretto, in
+v1.16.0/v1.16.1) e collegata anche all'idea di un crollo parziale già annotata da v1.14.0.
+Chiarite due scelte di design prima di implementare, con una domanda a scelta multipla:
+l'utente ha confermato entrambe le opzioni consigliate — crollo **progressivo** (si collega
+al danno da caduta già esistente, invece di un crollo secco a soglia) e **tre livelli** di
+durezza (fragile/normale/solida) indicati dal colore della barra già in cima ad ogni
+edificio.
+
+Aggiunto — durezza degli edifici:
+- Ogni edificio nasce con uno dei tre livelli di durezza (25% fragile, 50% normale, 25%
+  solida), assegnato a caso ad ogni nuova partita. La barra colorata già presente in cima
+  a ogni edificio dal v1.1.0 (finora un'insegna decorativa, tinta fissa per palette) ora
+  indica il livello — verde/giallo/rosso — e si svuota progressivamente come una barra di
+  "salute strutturale" man mano che l'edificio incassa danno.
+- La capacità di un edificio (quanto danno cumulativo può assorbire prima di crollare del
+  tutto) dipende dalla sua altezza originale (edifici più alti hanno più "piani" da far
+  cadere) moltiplicata per il livello di durezza.
+
+Aggiunto — crollo progressivo:
+- Ogni colpo che scava un cratere logora anche la struttura dell'edificio colpito, non
+  solo la sua facciata: superata gradualmente la sua capacità, il tetto comincia a
+  scendere (l'edificio perde "piani" dall'alto), fino a un minimo del 25% dell'altezza
+  originale — un cumulo di macerie, mai un edificio che sparisce del tutto. La base resta
+  sempre ancorata al livello strada: cambia solo quanto l'edificio è alto.
+- **Riusa il danno da caduta già esistente (v1.18.0) invece di inventare una fisica a
+  parte**: se un gorilla è ancorato all'edificio che crolla, scende insieme al tetto
+  esattamente come se il terreno gli mancasse sotto i piedi, sommandosi alla stessa soglia
+  cumulativa (`fallTotal`/`FALL_LETHAL`) già usata per lo sprofondamento nei crateri. Un
+  crollo abbastanza grave — da solo o sommato a danni da caduta precedenti nella stessa
+  partita — può quindi risultare fatale, con le stesse onomatopee dedicate ("SPLAT!",
+  "TONFO!"...).
+- Un edificio senza alcun gorilla sopra crolla comunque allo stesso modo (puramente
+  visivo): la logica non distingue i due casi, è solo questione di cosa c'è sopra quando
+  il tetto scende.
+- **Non affrontato in questo giro**: nessuna animazione di crollo dedicata oltre a tetto
+  che scende + detriti già esistenti (riusati, non un nuovo sistema); nessuna distinzione
+  fra "quanti piani" restano visivamente (solo altezza continua); il crollo non si
+  propaga a un edificio vicino (resta isolato, coerente con lo scoping già scelto per il
+  danno da caduta in v1.18.0); un edificio "costruito a mano" senza le proprietà di
+  durezza (pattern usato da alcuni script di test/debug già esistenti) resta
+  deliberatamente indistruttibile, per non rompere quel codice.
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione
+precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni,
+isolamento dei chip, screen-shake/detriti, arsenale v1.15.0, densità per orientamento di
+v1.16.1, colpo aereo di v1.17.0, nerf/danno da caduta/crateri irregolari di v1.18.0,
+sezione aggiornamenti di v1.19.0) — tutta verde; nuovo test automatico dedicato (Node +
+jsdom, 9 verifiche) su: durezza/capacità assegnate correttamente ad ogni edificio generato;
+che un colpo logori la struttura (e il tetto scenda proporzionalmente, anche di poco, fin
+dal primo colpo, coerentemente con un crollo "progressivo" e non a soglia); che la base
+dell'edificio resti sempre ancorata al livello strada; che il crollo non scenda mai sotto
+il 25% dell'altezza originale anche saturando il danno ben oltre la capacità; che un
+edificio costruito a mano senza le proprietà di durezza resti indistruttibile senza
+eccezioni; che un gorilla ancorato all'edificio che crolla scenda esattamente quanto scende
+il tetto, sommandosi a `fallTotal`; che un crollo che porta quel totale oltre la soglia
+risulti fatale con le onomatopee dedicate; che un edificio senza gorilla sopra crolli
+comunque senza toccare stato/gorilla; che la barra "durezza" rifletta correttamente la
+frazione di danno residuo. Verifica visiva via screenshot (browser headless) in orizzontale
+e verticale delle barre colorate su una città intatta, di un edificio crollato parzialmente
+accanto a uno intatto, e di un gorilla che sprofonda ed è assorbito dal crollo del proprio
+edificio.
 
 v1.19.0 — 2026-10-24
 ---------------------
