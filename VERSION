@@ -1,4 +1,4 @@
-1.16.1
+1.19.0
 
 Changelog
 =========
@@ -7,6 +7,123 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.19.0 — 2026-10-24
+---------------------
+Richiesta dell'utente: "non darmi il file, aggiorna tu il repo ... e crea una sezione
+impostazioni nel gioco da dove possa scaricare gli aggiornamenti". Verificato a fondo
+l'accesso in scrittura al repository GitHub (`gh auth status`, token d'ambiente,
+registro dei connettori MCP, ricerca di un eventuale tool `add_repo` citato da un
+messaggio d'errore del proxy): nessuna delle strade porta davvero a un accesso in
+scrittura da questa sessione. Chiesto esplicitamente all'utente se fornire un Personal
+Access Token temporaneo o restare con il flusso esistente di consegna dei file — ha
+scelto di **restare col flusso attuale**: continuo quindi a consegnare `index.html` e
+`VERSION` da caricare manualmente su GitHub, come in ogni round precedente; non è stato
+fatto (né è possibile da qui) alcun push diretto al repository.
+
+Aggiunto — sezione "aggiornamenti" nelle impostazioni:
+- Nel pannello impostazioni (gravità/densità/timer) è comparsa una nuova sezione che
+  mostra la versione installata e un bottone "controlla aggiornamenti". Al tocco, il
+  gioco confronta la propria versione con quella pubblicata nel file `VERSION` del
+  repository GitHub (letto via `fetch()` da `raw.githubusercontent.com` — una richiesta
+  di rete fatta dal browser dell'utente, non da questa sessione, quindi non soggetta
+  alle sue restrizioni di accesso).
+- Se è disponibile una versione più recente, compare un messaggio con il numero di
+  versione e un link alla pagina del file su GitHub (vista "blob", con il suo bottone
+  "Download raw file") — non un link diretto al file HTML grezzo, che GitHub serve come
+  testo semplice e quindi non sarebbe giocabile.
+- Se la versione installata è già l'ultima, o se il controllo fallisce (rete assente,
+  risposta HTTP non valida, contenuto in un formato inatteso), un messaggio dedicato lo
+  segnala e il bottone resta sempre riutilizzabile.
+- **Non affrontato in questo giro**: nessun controllo automatico all'avvio (va avviato
+  a mano dal pannello impostazioni); nessun meccanismo di auto-aggiornamento del file
+  stesso, dato che resta un singolo `index.html` statico senza un vero backend — il
+  gioco può solo segnalare che una versione più recente esiste e indicare dove
+  scaricarla.
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione
+precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni,
+isolamento dei chip, screen-shake/detriti, arsenale v1.15.0, densità per orientamento di
+v1.16.1, colpo aereo di v1.17.0, nerf/danno da caduta/crateri irregolari di v1.18.0) —
+tutta verde; nuovo test automatico dedicato (Node + jsdom, con `window.fetch` sostituito
+da una funzione finta) che conferma: il confronto fra versioni (`compareVersions()`,
+incluso il caso di numeri a più cifre tipo 1.2.0 vs 1.10.0); che il pannello mostri la
+versione installata corretta; il messaggio con link quando esiste una versione più
+recente; il messaggio "hai già l'ultima versione" quando le versioni coincidono; il
+messaggio d'errore (e il bottone che torna comunque utilizzabile, mai bloccato) sia per
+un fetch fallito sia per una risposta HTTP non valida; verifica visiva via screenshot
+(browser headless, orizzontale e verticale) dei tre esiti — nuova versione disponibile,
+già aggiornato, errore di rete.
+
+v1.18.0 — 2026-10-24
+---------------------
+Due richieste dell'utente nella stessa sessione, subito dopo aver provato il colpo aereo di v1.17.0: "limitiamolo sennò è troppo semplice" (nerf), e come terzo passo dell'ibridazione con Worms Armageddon "danno da caduta + crateri irregolari" — l'ultima idea rimasta fra quelle proposte in v1.15.0 insieme a casse con potenziamenti e spostamento prima del tiro (entrambe ancora da scegliere). Chiarito il tipo di nerf tramite una domanda a scelta multipla: l'utente ha scelto una combinazione di due delle opzioni proposte, raggio ridotto e utilizzi limitati a partita.
+
+Cambiato — nerf del colpo aereo:
+- **Raggio d'esplosione ridotto per bomba**: ogni bomba del colpo aereo scava ora un cratere più piccolo delle altre armi (raggio al 60% di quello normale), applicato solo al punto in cui viene chiamato `blastBuilding()` per questa arma — il bilanciamento resta sulla copertura d'area su più punti, non sul danno pieno per impatto, come già notato (e poi rivisto) nello scoping di v1.17.0.
+- **Utilizzi limitati a partita**: 2 lanci per ciascun giocatore in ogni partita (non condivisi fra i due, si azzerano solo a una nuova partita — non fra un turno e l'altro della stessa). Il bottone del colpo aereo nella riga armi mostra ora un badge con gli utilizzi residui del giocatore di turno, e si "spegne" (sfumato, non cliccabile) quando finiscono.
+
+Aggiunto — danno da caduta + crateri irregolari:
+- **Crateri meno regolari**: il contorno di ogni cratere non è più un cerchio perfetto ma una forma leggermente frastagliata (un poligono con un bordo irregolare generato una volta per cratere, rigenerato quando due crateri si fondono). Puramente visivo: tutta la logica di gioco (fusione dei crateri, passaggio dei proiettili attraverso un buco già scavato, il nuovo danno da caduta sotto) continua a usare il raggio circolare "nominale" del cratere, invariato — una scelta di scoping per non rimettere in discussione collisioni e test già verificati nei round precedenti.
+- **Danno da caduta**: se un colpo (di qualunque arma) scava un cratere proprio sotto i piedi di un gorilla senza colpirlo direttamente — un colpo diretto continua a uccidere subito come sempre, invariato — il gorilla perde l'appoggio e sprofonda verso il basso, fino al più alla base del proprio edificio. Gli sprofondamenti si sommano nel corso della partita: superata una soglia cumulativa, la caduta diventa fatale come un colpo diretto, punto all'avversario, con onomatopee dedicate ("SPLAT!", "TONFO!"...) invece di quelle di un'esplosione/colpo.
+- **Non affrontato in questo giro** (restano idee aperte): casse con potenziamenti e spostamento prima del tiro, le altre due idee Worms Armageddon non scelte; un vero crollo strutturale dell'edificio (idea distinta "durezza dei palazzi + crollo", proposta separatamente dall'utente e non ancora scelta); il danno da caduta non "attraversa" verso un edificio vicino più basso, il gorilla sprofonda sempre e solo entro i confini del proprio edificio d'origine; un cambio di orientamento del dispositivo a metà partita azzera l'eventuale sprofondamento accumulato (coerente con `placeGorillas()`, che rimette comunque i gorilla sul tetto in quel caso, invariato dal v1.1.0).
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni, isolamento dei chip, screen-shake/detriti, arsenale v1.15.0, densità per orientamento di v1.16.1, colpo aereo di v1.17.0) — tutta verde, inclusi gli 11 test del colpo aereo scritti in v1.17.0 (confermano che il nerf non ha rotto il comportamento base dell'arma); nuovo test automatico dedicato (Node + jsdom, 19 verifiche) su: configurazione del nerf, inizializzazione di utilizzi/danno da caduta ad ogni nuova partita, consumo e rifiuto di lancio con utilizzi esauriti (sia da `doAirstrike()` sia dal click sul bottone), badge e stile "spento" nella riga armi, raggio del cratere effettivamente più piccolo per il colpo aereo rispetto a una banana a parità di impatto (verificato tramite il ciclo di gioco reale, non solo la funzione isolata), il nuovo array di jitter su ogni cratere, lo sprofondamento e il suo accumulo, il clamp alla base dell'edificio, la caduta fatale oltre soglia con le onomatopee dedicate, l'assenza di danno da caduta quando lo stesso colpo uccide già per danno collaterale, e l'azzeramento dello sprofondamento accumulato a un cambio di orientamento; verifica visiva via screenshot (browser headless) del badge con utilizzi residui, del bottone "spento" a utilizzi esauriti, di un cratere frastagliato ravvicinato, e di un gorilla visibilmente sprofondato dopo un danno da caduta.
+
+v1.17.0 — 2026-10-24
+---------------------
+Prosegue l'ibridazione con Worms Armageddon iniziata in v1.15.0 (arsenale con granata e
+bomba a tempo). Tra le quattro idee proposte per il prossimo passo — casse con
+potenziamenti, spostamento prima del tiro, crateri irregolari + danno da caduta, colpo
+aereo — l'utente ha scelto il colpo aereo.
+
+Aggiunto:
+- **Quarta arma: colpo aereo (✈️)**, nuovo chip nella riga delle armi durante la mira. A
+  differenza delle altre tre, non si lancia dalla propria posizione con angolo e potenza:
+  tenendo premuto e trascinando sullo schermo si sceglie invece un punto bersaglio
+  orizzontale (un mirino tratteggiato verticale segue il dito/puntatore), e al rilascio
+  piovono dall'alto 3 bombe in sequenza, distribuite su una fascia larga attorno al punto
+  scelto (con un piccolo scarto casuale per non sembrare allineate con un righello) —
+  coprendo un'area più ampia di un singolo colpo, invece di infliggere più danno per
+  bomba.
+- Le bombe cadono una alla volta: la successiva parte da sola non appena l'esplosione
+  della precedente finisce, a meno che una non colpisca in pieno un gorilla — in quel
+  caso la sequenza si interrompe lì ed si passa subito all'esito del turno, come con le
+  altre armi.
+- Ogni bomba riusa la stessa fisica/collisione già esistente per la banana (esplode al
+  primo contatto con edificio/strada/gorilla, stesso raggio d'esplosione delle altre
+  armi): la novità è tutta nel gesto di mira e nel rilascio sequenziale, non in un nuovo
+  motore fisico.
+- Durante un colpo aereo il gorilla resta fermo nella posa di mira (nessuna animazione di
+  lancio, dato che le bombe non vengono lanciate a mano) e l'HUD mostra un'istruzione
+  dedicata ("tocca/trascina per scegliere il bersaglio · rilascia per bombardare") al
+  posto dell'indicatore di angolo/potenza, che per questa sola arma non ha senso.
+- Nuovo disegno dedicato per la bomba in caduta (ogiva, banda rossa, alette), al posto
+  della banana, orientato nella direzione di volo.
+
+Non affrontato in questo giro (restano idee aperte per un round successivo):
+- Casse con potenziamenti, spostamento prima del tiro, crateri irregolari + danno da
+  caduta — le altre tre idee proposte, non scelte questa volta.
+- Nessuna riduzione del danno per singola bomba del colpo aereo: il bilanciamento resta
+  tutto nella copertura d'area, scelta di scoping volutamente semplice per il primo giro
+  di questa arma.
+- L'IA continua a usare solo la banana (invariato dalla v1.15.0): un'IA capace di usare
+  anche il colpo aereo resta un'idea per un round futuro.
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione
+precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni,
+isolamento dei chip, screen-shake/detriti, arsenale v1.15.0, densità per orientamento di
+v1.16.1) — tutta verde; nuovo test automatico dedicato (Node + jsdom, 11 verifiche) che
+conferma: la coda di bombe generata dal colpo aereo (numero e posizioni dentro i bordi
+dello schermo); che la prima bomba nasca dall'alto senza spinta orizzontale e senza
+animazione di lancio; che ogni bomba esploda al contatto riusando la fisica esistente;
+che dopo un'esplosione senza vittima parta da sola la bomba successiva; che dopo
+l'ultima bomba senza vittima il turno passi e la coda si azzeri; che un colpo diretto a
+metà sequenza interrompa subito la coda residua; il comportamento di mira/trascinamento/
+rilascio dedicato (incluso il caso limite di un cambio d'arma a metà gesto); e che la
+riga delle armi funzioni ancora correttamente con quattro chip. Verifica visiva via
+screenshot e un flusso di click/trascinamento reale (browser headless) in verticale e
+orizzontale: chip selezionato, mirino di puntamento, bomba in caduta ed esplosione.
 
 v1.16.1 — 2026-10-20
 ---------------------
