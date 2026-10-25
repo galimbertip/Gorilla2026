@@ -1,4 +1,4 @@
-1.20.0
+1.21.0
 
 Changelog
 =========
@@ -7,6 +7,56 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.21.0 — 2026-10-25
+---------------------
+Richiesta dell'utente: "mettiamoci gli spostamenti, ma, se il palazzo affianco è + alto o +
+basso di un tot non ci si può spostare" — l'ultima idea Worms Armageddon rimasta in roadmap
+dal 2026-10-15 (dopo arsenale in v1.15.0 e colpo aereo in v1.17.0), con un vincolo esplicito
+sul dislivello aggiunto direttamente dall'utente nella stessa richiesta. Chiarita con una
+domanda a scelta multipla l'ampiezza della mossa: l'utente ha confermato l'opzione
+consigliata, un salto su un solo edificio adiacente per turno (non un cammino libero su più
+edifici), senza consumare il turno.
+
+Aggiunto — spostamento prima del tiro:
+- Due frecce (◀/▶) ai bordi dello schermo durante la propria fase di mira (stesso linguaggio
+  visivo dei chip armi, nascoste durante il turno dell'IA e fuori da quella fase). Un tap
+  sposta il gorilla sull'edificio immediatamente a sinistra o a destra di quello attuale,
+  **una sola volta per turno** — il diritto torna al turno successivo — e **senza consumare
+  il turno**: ci si può ancora spostare e poi mirare/sparare normalmente nello stesso turno.
+- **Vincolo di dislivello richiesto dall'utente**: lo spostamento è bloccato se l'edificio
+  adiacente è troppo più alto O troppo più basso di quello attuale (soglia simmetrica,
+  circa due altezze di gorilla). La freccia si "spegne" (sfumata, non cliccabile) quando il
+  salto in quella direzione non è permesso, con lo stesso stile già usato per il colpo aereo
+  esaurito (v1.18.0).
+- Bloccato anche al bordo della città (nessun edificio oltre l'ultimo) e se l'edificio
+  bersaglio è già occupato dall'altro gorilla (niente due gorilla sullo stesso palazzo).
+- **Si collega al crollo progressivo di v1.20.0**: il controllo del dislivello usa
+  l'altezza LIVE dell'edificio (quella che cala se è parzialmente crollato), non quella
+  originale — un edificio crollato può quindi diventare più facile da raggiungere saltando
+  giù, o un gradino troppo basso per tornarci su. Effetto collaterale voluto, coerente con
+  l'aver riusato la stessa altezza "vera" già usata da collisioni e crollo, non un sistema
+  a parte.
+- **Non affrontato in questo giro**: nessun cammino libero su più edifici consecutivi (resta
+  un salto singolo per turno, come scelto); l'IA continua a non spostarsi mai, come già fa
+  con le armi (invariato dalla v1.15.0); nessuna animazione di cammino, solo un
+  riposizionamento diretto con un piccolo "tic" sonoro (lo stesso già usato per i rimbalzi).
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione
+precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni, isolamento
+dei chip, screen-shake/detriti, arsenale v1.15.0, densità per orientamento di v1.16.1,
+colpo aereo di v1.17.0, nerf/danno da caduta/crateri irregolari di v1.18.0, sezione
+aggiornamenti di v1.19.0, durezza/crollo di v1.20.0) — tutta verde; nuovo test automatico
+dedicato (Node + jsdom, 10 verifiche) su: uno spostamento valido che aggiorna
+correttamente edificio/posizione del gorilla; un secondo spostamento nello stesso turno
+rifiutato; il diritto che torna con `nextTurn()`; un dislivello troppo alto che blocca lo
+spostamento; un dislivello troppo basso che lo blocca allo stesso modo (simmetrico); il
+bordo della città che blocca lo spostamento; l'edificio già occupato dall'altro gorilla che
+lo blocca; lo spostamento che non consuma il turno (si può ancora sparare subito dopo);
+l'IA che non si sposta mai; lo spostamento sempre rifiutato fuori dalla fase di mira.
+Verifica visiva via screenshot (browser headless) in orizzontale e verticale: le due
+frecce attive durante la mira, il gorilla sul nuovo edificio dopo uno spostamento riuscito,
+e una freccia "spenta" verso un edificio artificialmente troppo alto.
 
 v1.20.0 — 2026-10-24
 ---------------------
