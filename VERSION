@@ -1,4 +1,4 @@
-1.21.0
+1.23.0
 
 Changelog
 =========
@@ -7,6 +7,125 @@ Versionamento in stile MAJOR.MINOR.PATCH:
 - PATCH — correzioni di bug, nessun cambiamento visibile nel comportamento previsto.
 - MINOR — nuove funzionalità o miglioramenti percepibili, retrocompatibili.
 - MAJOR — riscritture o cambi che rompono la compatibilità con partite/salvataggi precedenti.
+
+v1.23.0 — 2026-10-29
+---------------------
+Richiesta dell'utente: "Facciamo subito la cassa rifornimenti" — l'ultima idea Worms
+Armageddon rimasta in roadmap dal 2026-10-15. Specificata subito con un vincolo di design
+("dato che di armi ce ne sono poche e non limitate numericamente, facciamo che la cassa
+contiene un tipo di arma non contenuta nel catalogo standard"), poi chiarita con due
+domande a scelta multipla: l'utente ha scelto "banana a grappolo" come arma esclusiva
+(invece di una super banana a esplosione più ampia, o una banana teleport) e "va raggiunta
+spostandosi" come modo di raccoglierla (invece di colpirla con un tiro, o di ottenerla
+automaticamente al turno successivo).
+
+Aggiunto — cassa rifornimenti + banana a grappolo:
+- Una cassa di legno cade a intervalli casuali (circa ogni 10-22s la prima volta, 18-35s le
+  successive) su un edificio a caso non occupato da nessuno dei due gorilla, e vi resta
+  fluttuando con un bagliore ambra finché non viene raccolta — nessuna scadenza, al massimo
+  una cassa alla volta.
+- Si raccoglie solo spostandosi fisicamente sul suo edificio con le freccette di
+  spostamento già introdotte in v1.21.0 (un edificio adiacente alla volta): non basta
+  colpirla con un tiro. Chi la raggiunge ottiene una carica di "banana a grappolo" (🍇),
+  una quinta arma mai scelta normalmente dalla riga armi — appare nella riga solo quando
+  se ne ha almeno una carica, con un badge che mostra quante.
+- La banana a grappolo si lancia come una banana normale (proprio angolo/potenza), ma al
+  primo contatto con un edificio o la strada — mai su un colpo diretto su un gorilla, che
+  come ogni altra arma esplode sempre subito — fa cadere altre tre mini-bananas in sequenza
+  sparse vicino al punto d'impatto, ciascuna con un cratere più piccolo delle altre armi:
+  una raffica di botti vicini invece di un singolo colpo più forte. Un colpo diretto (sulla
+  banana principale o su una qualunque delle mini-bananas successive) ferma subito la
+  sequenza, esattamente come già fa il colpo aereo quando una delle sue bombe centra un
+  gorilla a metà sequenza.
+- Un toast dedicato ("📦 CASSA RACCOLTA! 🍇 pronta") e un piccolo suono a due note confermano
+  la raccolta. La cassa non appare mai in modalità mira numerica (v1.22.0): quel ruleset non
+  prevede spostamenti, quindi non sarebbe comunque mai raggiungibile.
+- L'IA non raccoglie mai la cassa (non si sposta mai, invariato dalla v1.15.0/v1.21.0): la
+  banana a grappolo resta un vantaggio esclusivo dei giocatori umani, su entrambe le
+  modalità (1 vs 1 e vs AI).
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione
+precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni, isolamento
+dei chip, screen-shake/detriti, arsenale v1.15.0, densità per orientamento di v1.16.1,
+colpo aereo di v1.17.0 — con un suo test aggiornato per il quinto bottone ora sempre
+presente nel markup della riga armi, nerf/danno da caduta/crateri irregolari di v1.18.0,
+sezione aggiornamenti di v1.19.0, durezza/crollo di v1.20.0, spostamento prima del tiro di
+v1.21.0, mira numerica di v1.22.0) — tutta verde; nuovo test automatico dedicato (Node +
+jsdom, 9 verifiche) su: la cassa non spawna mai su un edificio occupato da un gorilla
+(200 spawn simulati); uno spostamento che atterra esattamente sull'edificio della cassa la
+raccoglie incrementando le cariche del giocatore di turno; uno spostamento nella direzione
+sbagliata non la raccoglie; il chip 🍇 resta nascosto senza cariche e un click forzato non
+seleziona comunque l'arma; il chip appare subito dopo la raccolta (badge incluso, senza
+aspettare un frame); un lancio di banana a grappolo consuma la carica e fa partire la coda
+di mini-bananas, col turno che passa solo dopo l'ultima; un colpo diretto ferma subito la
+sequenza senza lasciare coda residua; in modalità mira numerica la cassa non spawna mai.
+Verifica visiva via screenshot (browser headless) in orizzontale e verticale: la cassa
+fluttuante su un tetto, il toast di raccolta col nuovo chip comparso nella riga armi, e la
+raffica di mini-esplosioni della banana a grappolo.
+
+v1.22.0 — 2026-10-28
+---------------------
+Richiesta dell'utente: "Facciamo subito la modalità classica con mira numerica" — l'ultima
+idea rimasta nella sezione "Idee" della roadmap, un omaggio diretto all'originale
+GORILLA.BAS (DOS, 1990), che non aveva alcun puntamento col mouse: angolo e velocità si
+digitavano come numeri da tastiera. Chiarite due scelte di design prima di implementare, con
+una domanda a scelta multipla: l'utente ha scelto un nuovo chip "modalità mira" nel pannello
+impostazioni (non un terzo pulsante di modalità partita nel menu iniziale, né un interruttore
+da cambiare al volo durante la mira), e — a differenza delle versioni precedenti, dove le
+aggiunte "moderne" restavano sempre tutte disponibili insieme alle novità del giro — un
+ruleset fedele all'originale per quella partita: solo banana, niente spostamento prima del
+tiro.
+
+Aggiunto — modalità mira "classica" (numerica):
+- Nuovo chip nel pannello impostazioni, "— modalità mira —": LIBERA (default, invariata
+  rispetto a prima: trascinamento sul canvas) / NUMERICA. Scelta persistente tra le sessioni
+  via localStorage, come gravità/densità/timer.
+- Con NUMERICA selezionata, durante la propria fase di mira il giocatore umano non trascina
+  più sul canvas: compaiono invece due campi numerici (angolo 0-360°, potenza 1-100%) e un
+  bottone "LANCIA 🍌" in basso, nella stessa posizione della riga armi che sostituiscono.
+  Angolo e potenza digitati aggiornano dal vivo la freccia di mira e la barra potenza
+  dell'HUD (stessa identica preview visiva di sempre, solo pilotata dai numeri invece che dal
+  trascinamento) — nessuna modifica a drawAimGuide()/drawHUD(), che leggono comunque
+  curAngle()/curPower() indipendentemente da come sono stati impostati.
+- **Ruleset fedele all'originale per quella partita**, come richiesto: la riga di selezione
+  armi resta sempre nascosta (si gioca sempre e solo con la banana, niente granata/bomba a
+  tempo/colpo aereo) e le frecce di spostamento prima del tiro (v1.21.0) restano sempre
+  nascoste e inattive (canMove() rifiuta sempre). Gravità, densità edifici, timer per turno,
+  durezza/crollo degli edifici e tutto il resto restano scelte indipendenti, non toccate da
+  questa modalità: la "modalità classica" riguarda solo armamentario/spostamento e il modo di
+  impostare angolo/potenza, non torna indietro sul resto del gioco 2026.
+- L'angolo digitato è ricondotto correttamente a 0°-360° (anche per un valore negativo o
+  oltre 360 per errore) e la potenza è clampata tra 5 (minimo già usato dall'input a
+  trascinamento) e 100, con lo stesso bottone sempre riutilizzabile.
+- **Non affrontato in questo giro**: nessun aiuto numerico per l'IA (continua a usare la
+  propria ricerca a griglia indipendente, invariata); il testo di suggerimento nel menu
+  iniziale ("Muovi il cursore → punta l'angolo"...) non è stato aggiornato per menzionare la
+  modalità numerica, dato che la scelta del chip nel pannello impostazioni la rende già
+  chiara.
+
+**Bug trovato e corretto prima della consegna** (verifica visiva di routine, non
+dall'utente): il bottone "LANCIA" riusava inizialmente la classe `.bs` (testo quasi nero,
+`#1e3040`), pensata per i bottoni dei menu a schermo intero su sfondo nero pieno (es.
+"◂ INDIETRO" nel pannello impostazioni) — sopra il campo di gioco colorato durante una
+partita vera il testo diventava praticamente invisibile. Corretto con uno stile dedicato
+(`.naFire`), ambra a contrasto (`#ffd000`) nello stesso linguaggio "banana/azione" già usato
+per il chip arma attivo (`.wc.on`).
+
+Verificato: `node --check` per la sintassi; rieseguita tutta la suite di regressione
+precedente (mira a 360°, fusione crateri, difficoltà IA, pannello impostazioni, isolamento
+dei chip — esteso anche alla nuova riga "modalità mira" per lo stesso pattern di bug già
+preso due volte, screen-shake/detriti, arsenale v1.15.0, densità per orientamento di v1.16.1,
+colpo aereo di v1.17.0, nerf/danno da caduta/crateri irregolari di v1.18.0, sezione
+aggiornamenti di v1.19.0, durezza/crollo di v1.20.0, spostamento prima del tiro di v1.21.0) —
+tutta verde; nuovo test automatico dedicato (Node + jsdom, 8 verifiche) su persistenza e
+validazione della scelta salvata, riga armi/frecce di spostamento sempre nascoste con la
+modalità numerica attiva (anche forzando canMove()/un click su un'arma a mano), campi
+numerici che aggiornano dal vivo angolo/potenza del turno corrente, il bottone che spara
+clampando la potenza al minimo di 5, un angolo negativo ricondotto correttamente a 0-360°, e
+il pieno ripristino del comportamento precedente tornando alla modalità "libera". Verifica
+visiva via screenshot (browser headless) in orizzontale e verticale del pannello impostazioni
+con il nuovo chip, della UI di mira numerica durante una partita vera (prima e dopo il fix
+del bottone illeggibile), e del lancio avvenuto con i valori digitati.
 
 v1.21.0 — 2026-10-25
 ---------------------
